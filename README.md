@@ -1,93 +1,143 @@
-# LastFM
+# GraphGPS: General Powerful Scalable Graph Transformers
+
+[![arXiv](https://img.shields.io/badge/arXiv-2205.12454-b31b1b.svg)](https://arxiv.org/abs/2205.12454)
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/recipe-for-a-general-powerful-scalable-graph/graph-regression-on-zinc)](https://paperswithcode.com/sota/graph-regression-on-zinc?p=recipe-for-a-general-powerful-scalable-graph)
 
 
+![GraphGPS-viz](./GraphGPS.png)
 
-## Getting started
+How to build a graph Transformer? We provide a 3-part recipe on how to build graph Transformers with linear complexity. Our GPS recipe consists of choosing 3 main ingredients:
+1. positional/structural encoding: [LapPE](https://arxiv.org/abs/2106.03893), [RWSE](https://arxiv.org/abs/2110.07875), [SignNet](https://arxiv.org/abs/2202.13013), [EquivStableLapPE](https://arxiv.org/abs/2203.00199)
+2. local message-passing mechanism: [GatedGCN](https://arxiv.org/abs/1711.07553), [GINE](https://arxiv.org/abs/1905.12265), [PNA](https://arxiv.org/abs/2004.05718)
+3. global attention mechanism: [Transformer](https://arxiv.org/abs/1706.03762), [Performer](https://arxiv.org/abs/2009.14794), [BigBird](https://arxiv.org/abs/2007.14062)
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+In this *GraphGPS* package we provide several positional/structural encodings and model choices, implementing the GPS recipe. GraphGPS is built using [PyG](https://www.pyg.org/) and [GraphGym from PyG2](https://pytorch-geometric.readthedocs.io/en/2.0.0/notes/graphgym.html).
+Specifically *PyG v2.2* is required.
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
 
-## Add your files
+### Python environment setup with Conda
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+```bash
+conda create -n graphgps python=3.10
+conda activate graphgps
 
+conda install pytorch=1.13 torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
+conda install pyg=2.2 -c pyg -c conda-forge
+pip install pyg-lib -f https://data.pyg.org/whl/torch-1.13.0+cu117.html
+
+# RDKit is required for OGB-LSC PCQM4Mv2 and datasets derived from it.  
+conda install openbabel fsspec rdkit -c conda-forge
+
+pip install pytorch-lightning yacs torchmetrics
+pip install performer-pytorch
+pip install tensorboardX
+pip install ogb
+pip install wandb
+
+conda clean --all
 ```
-cd existing_repo
-git remote add origin https://gitlab.ethz.ch/fgroetschla/lastfm.git
-git branch -M main
-git push -uf origin main
+
+
+### Running GraphGPS
+```bash
+conda activate graphgps
+
+# Running GPS with RWSE and tuned hyperparameters for ZINC.
+python main.py --cfg configs/GPS/zinc-GPS+RWSE.yaml  wandb.use False
+
+# Running config with tuned SAN hyperparams for ZINC.
+python main.py --cfg configs/SAN/zinc-SAN.yaml  wandb.use False
+
+# Running a debug/dev config for ZINC.
+python main.py --cfg tests/configs/graph/zinc.yaml  wandb.use False
 ```
 
-## Integrate with your tools
+## Running GraphGPS on OGB-LSC PCQM4Mv2
+### Training
+```bash
+# "small" GPS (GatedGCN+Transformer) with RWSE: 5layers, 304dim, 6152001 params 
+python main.py --cfg configs/GPS/pcqm4m-GPS+RWSE.yaml
+# "medium" GPS (GatedGCN+Transformer) with RWSE: 10layers, 384dim, 19414641 params
+python main.py --cfg configs/GPS/pcqm4m-GPSmedium+RWSE.yaml
+# "deep" GPS (GatedGCN+Transformer) with RWSE: 16layers, 256dim, 13807345 params
+python main.py --cfg configs/GPS/pcqm4m-GPSdeep+RWSE.yaml
+```
 
-- [ ] [Set up project integrations](https://gitlab.ethz.ch/fgroetschla/lastfm/-/settings/integrations)
+### Expected performance
+- Note 1: For training we set aside 150k molecules as a custom validation set for the model selection / early stopping.
+The official `valid` set is used as the testing set in our training setup.
+For running inference on `test-dev` and `test-challenge` look further below.
 
-## Collaborate with your team
+- Note 2: GPS-medium took ~48h, GPS-deep ~60h to train on a single NVidia A100 GPU. Your reproduced results may slightly vary.
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+- Note 3: This version of GPS **does not** use 3D atomic position information.
 
-## Test and Deploy
+| Model config | parameters | train MAE | custom valid MAE | official valid MAE |
+|--------------|-----------:|----------:|-----------------:|-------------------:|
+| GPS-small    |  6,152,001 |   0.0638 |           0.0849 |             0.0937 |
+| GPS-medium   | 19,414,641 |   0.0726 |           0.0805 |             0.0858 |
+| GPS-deep     | 13,807,345 |   0.0641 |           0.0796 |             0.0852 |
 
-Use the built-in continuous integration in GitLab.
+### Inference and submission files for OGB-LSC leaderboard
+You need a saved pretrained model from the previous step, then run it with an "inference" script that loads official
+`valid`, `test-dev`, and `test-challenge` splits, then runs inference, and the official OGB Evaluator.
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+```bash
+# You can download our pretrained GPS-deep (151 MB).
+wget https://www.dropbox.com/s/aomimvak4gb6et3/pcqm4m-GPS%2BRWSE.deep.zip
+unzip pcqm4m-GPS+RWSE.deep.zip -d pretrained/
 
-***
+# Run inference and official OGB Evaluator.
+python main.py --cfg configs/GPS/pcqm4m-GPSdeep-inference.yaml 
 
-# Editing this README
+# Result files for OGB-LSC Leaderboard.
+results/pcqm4m-GPSdeep-inference/0/y_pred_pcqm4m-v2_test-challenge.npz
+results/pcqm4m-GPSdeep-inference/0/y_pred_pcqm4m-v2_test-dev.npz
+```
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
 
-## Suggestions for a good README
+## Benchmarking GPS on 11 datasets
+See `run/run_experiments.sh` script to run multiple random seeds per each of the 11 datasets. We rely on Slurm job scheduling system.
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+Alternatively, you can run them in terminal following the example below. Configs for all 11 datasets are in `configs/GPS/`.
+```bash
+conda activate graphgps
+# Run 10 repeats with 10 different random seeds (0..9):
+python main.py --cfg configs/GPS/zinc-GPS+RWSE.yaml  --repeat 10  wandb.use False
+# Run a particular random seed:
+python main.py --cfg configs/GPS/zinc-GPS+RWSE.yaml  --repeat 1  seed 42  wandb.use False
+```
 
-## Name
-Choose a self-explaining name for your project.
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+### W&B logging
+To use W&B logging, set `wandb.use True` and have a `gtransformers` entity set-up in your W&B account (or change it to whatever else you like by setting `wandb.entity`).
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+## Unit tests
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+To run all unit tests, execute from the project root directory:
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+```bash
+python -m unittest -v
+```
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+Or specify a particular test module, e.g.:
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+```bash
+python -m unittest -v unittests.test_eigvecs
+```
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+## Citation
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+If you find this work useful, please cite our NeurIPS 2022 paper:
+```bibtex
+@article{rampasek2022GPS,
+  title={{Recipe for a General, Powerful, Scalable Graph Transformer}}, 
+  author={Ladislav Ramp\'{a}\v{s}ek and Mikhail Galkin and Vijay Prakash Dwivedi and Anh Tuan Luu and Guy Wolf and Dominique Beaini},
+  journal={Advances in Neural Information Processing Systems},
+  volume={35},
+  year={2022}
+}
+```
