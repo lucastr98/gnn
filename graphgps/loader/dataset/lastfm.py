@@ -42,6 +42,8 @@ class LastFM(InMemoryDataset):
             (default: :obj:`False`)
     """
     url = 'https://www.dropbox.com/s/jvlbs09pz6zwcka/LastFM_processed.zip?dl=1'
+    
+    url_embeddings = 'https://polybox.ethz.ch/index.php/s/dkQW1wLywyT1NuV'
 
     def __init__(
         self,
