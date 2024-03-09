@@ -18,6 +18,7 @@ from graphgps.loader.dataset.aqsol_molecules import AQSOL
 from graphgps.loader.dataset.coco_superpixels import COCOSuperpixels
 from graphgps.loader.dataset.malnet_tiny import MalNetTiny
 from graphgps.loader.dataset.voc_superpixels import VOCSuperpixels
+from graphgps.loader.dataset.lastfm import LastFM
 from graphgps.loader.split_generator import (prepare_splits,
                                              set_dataset_splits)
 from graphgps.transform.posenc_stats import compute_posenc_stats
@@ -115,6 +116,9 @@ def load_dataset_master(format, name, dataset_dir):
         elif pyg_dataset_id == 'Planetoid':
             dataset = Planetoid(dataset_dir, name)
 
+        elif pyg_dataset_id == 'LastFM':
+            dataset = LastFM(dataset_dir)
+
         elif pyg_dataset_id == 'TUDataset':
             dataset = preformat_TUDataset(dataset_dir, name)
 
@@ -179,7 +183,7 @@ def load_dataset_master(format, name, dataset_dir):
             raise ValueError(f"Unsupported OGB(-derived) dataset: {name}")
     else:
         raise ValueError(f"Unknown data format: {format}")
-
+    
     pre_transform_in_memory(dataset, partial(task_specific_preprocessing, cfg=cfg))
 
     log_loaded_dataset(dataset, format, name)

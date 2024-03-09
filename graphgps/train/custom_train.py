@@ -20,6 +20,8 @@ def train_epoch(logger, loader, model, optimizer, scheduler, batch_accumulation)
     for iter, batch in enumerate(loader):
         batch.split = 'train'
         batch.to(torch.device(cfg.accelerator))
+        #print(batch)
+        #batch.x = torch.zeros((batch.num_nodes,1), device=batch.edge_index.device)
         pred, true = model(batch)
         if cfg.dataset.name == 'ogbg-code2':
             loss, pred_score = subtoken_cross_entropy(pred, true)
@@ -57,6 +59,8 @@ def eval_epoch(logger, loader, model, split='val'):
         if cfg.gnn.head == 'inductive_edge':
             pred, true, extra_stats = model(batch)
         else:
+            #print(batch)
+            #batch.x = torch.zeros((batch.num_nodes,1), device=batch.edge_index.device)
             pred, true = model(batch)
             extra_stats = {}
         if cfg.dataset.name == 'ogbg-code2':

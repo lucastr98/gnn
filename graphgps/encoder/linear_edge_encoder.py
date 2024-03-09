@@ -7,7 +7,7 @@ from torch_geometric.graphgym.register import register_edge_encoder
 class LinearEdgeEncoder(torch.nn.Module):
     def __init__(self, emb_dim):
         super().__init__()
-        if cfg.dataset.name in ['MNIST', 'CIFAR10']:
+        if cfg.dataset.name in ['MNIST', 'CIFAR10', 'ogbl-ddi']:
             self.in_dim = 1
         else:
             raise ValueError("Input edge feature dim is required to be hardset "
@@ -15,5 +15,5 @@ class LinearEdgeEncoder(torch.nn.Module):
         self.encoder = torch.nn.Linear(self.in_dim, emb_dim)
 
     def forward(self, batch):
-        batch.edge_attr = self.encoder(batch.edge_attr.view(-1, self.in_dim))
+        batch.edge_attr = self.encoder(batch.train_edge_label.view(-1, self.in_dim))
         return batch
