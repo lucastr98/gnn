@@ -2,6 +2,9 @@ import datetime
 import os
 import torch
 import logging
+import math
+from typing import Union
+from torch_geometric.data import Data, HeteroData
 
 import graphgps  # noqa, register custom modules
 from graphgps.agg_runs import agg_runs
@@ -11,7 +14,7 @@ from torch_geometric.graphgym.cmd_args import parse_args
 from torch_geometric.graphgym.config import (cfg, dump_cfg,
                                              set_cfg, load_cfg,
                                              makedirs_rm_exist)
-from torch_geometric.graphgym.loader import create_loader
+from torch_geometric.graphgym.loader import create_dataset, get_loader
 from torch_geometric.graphgym.logger import set_printing
 from torch_geometric.graphgym.optim import create_optimizer, \
     create_scheduler, OptimizerConfig
@@ -21,6 +24,7 @@ from torch_geometric.graphgym.utils.comp_budget import params_count
 from torch_geometric.graphgym.utils.device import auto_select_device
 from torch_geometric.graphgym.register import train_dict
 from torch_geometric import seed_everything
+from torch import Tensor
 
 from graphgps.finetuning import load_pretrained_model_cfg, \
     init_model_from_pretrained
@@ -46,6 +50,114 @@ def new_scheduler_config(cfg):
         schedule_patience=cfg.optim.schedule_patience, min_lr=cfg.optim.min_lr,
         num_warmup_epochs=cfg.optim.num_warmup_epochs,
         train_mode=cfg.train.mode, eval_period=cfg.train.eval_period)
+
+
+class LastFMSampler(torch.utils.data.DataLoader):
+    r"""A data loader that randomly samples nodes within a graph and returns
+    their induced subgraph.
+
+    .. note::
+
+        For an example of using
+        :class:`~torch_geometric.loader.RandomNodeLoader`, see
+        `examples/ogbn_proteins_deepgcn.py
+        <https://github.com/pyg-team/pytorch_geometric/blob/master/examples/
+        ogbn_proteins_deepgcn.py>`_.
+
+    Args:
+        data (torch_geometric.data.Data or torch_geometric.data.HeteroData):
+            The :class:`~torch_geometric.data.Data` or
+            :class:`~torch_geometric.data.HeteroData` graph object.
+        num_parts (int): The number of partitions.
+        **kwargs (optional): Additional arguments of
+            :class:`torch.utils.data.DataLoader`, such as :obj:`num_workers`.
+    """
+    def __init__(
+        self,
+        data: Data,
+        batch_size: int,
+        **kwargs,
+    ):
+        self.data = data
+
+        edge_index = data.edge_index
+
+        self.edge_index = edge_index
+        self.num_nodes = data.num_nodes
+        self.num_pos_edges = (self.data.train_edge_label == 1).sum(dim=0)
+
+        super().__init__(
+            range(batch_size),
+            batch_size=1,
+            collate_fn=self.collate_fn,
+            **kwargs,
+        )
+
+    def collate_fn(self, index):
+        if not isinstance(index, Tensor):
+            index = torch.tensor(index)
+
+
+        edge_mask = torch.cat((torch.randperm(self.num_pos_edges)[:10000], torch.randperm(self.data.train_edge_index.shape[1]-self.num_pos_edges)[:10000]+self.num_pos_edges))
+        edge_index = self.data.train_edge_index[:, edge_mask]
+        edge_label = self.data.train_edge_label[edge_mask]
+
+        return Data(x=self.data.x, edge_index = self.edge_index, train_edge_index = edge_index, train_edge_label = edge_label, num_nodes=self.num_nodes, val_edge_index=self.data.val_edge_index, val_edge_label=self.data.val_edge_label, test_edge_index=self.data.test_edge_index, test_edge_label=self.data.test_edge_label)
+
+
+
+def custom_create_loader(cfg):
+    """Create data loader object.
+
+    Returns: List of PyTorch data loaders
+
+    """
+    dataset = create_dataset()
+    # train loader
+    if cfg.dataset.task == 'graph':
+        id = dataset.data['train_graph_index']
+        loaders = [
+            custom_get_loader(dataset[id], cfg.train.sampler, cfg.train.batch_size,
+                       shuffle=True)
+        ]
+        delattr(dataset.data, 'train_graph_index')
+    else:
+        loaders = [
+            custom_get_loader(dataset, cfg.train.sampler, cfg.train.batch_size,
+                       shuffle=True)
+        ]
+
+    if True:
+        val_test_size = 1
+
+    # val and test loaders
+    for i in range(cfg.share.num_splits - 1):
+        if cfg.dataset.task == 'graph':
+            split_names = ['val_graph_index', 'test_graph_index']
+            id = dataset.data[split_names[i]]
+            loaders.append(
+                custom_get_loader(dataset[id], cfg.val.sampler, val_test_size,
+                           shuffle=False))
+            delattr(dataset.data, split_names[i])
+        else:
+            loaders.append(
+                custom_get_loader(dataset, cfg.val.sampler, val_test_size,
+                           shuffle=False))
+
+    return loaders
+
+def custom_get_loader(dataset, sampler, batch_size, shuffle=True):
+    pw = cfg.num_workers > 0
+    if False:
+        loader_train = get_loader(dataset, sampler, batch_size, shuffle)
+    else:
+        loader_train = LastFMSampler(dataset[0],
+                                        shuffle=shuffle,
+                                        batch_size=batch_size,
+                                        pin_memory=True, persistent_workers=pw)
+
+    return loader_train
+
 
 
 def custom_set_out_dir(cfg, cfg_fname, name_tag):
@@ -139,7 +251,7 @@ if __name__ == '__main__':
                      f"split_index={cfg.dataset.split_index}")
         logging.info(f"    Starting now: {datetime.datetime.now()}")
         # Set machine learning pipeline
-        loaders = create_loader()
+        loaders = custom_create_loader(cfg)
         loggers = create_logger()
         model = create_model()
         if cfg.pretrained.dir:
