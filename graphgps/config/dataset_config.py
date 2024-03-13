@@ -17,3 +17,9 @@ def dataset_cfg(cfg):
 
     # infer-link parameters (e.g., edge prediction task)
     cfg.dataset.infer_link_label = "None"
+
+    cfg.dataset.num_pos_samples = 10000
+
+    cfg.dataset.num_neg_samples = 100000
+    
+    cfg.dataset.with_embeddings = True

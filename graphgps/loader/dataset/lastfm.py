@@ -48,11 +48,15 @@ class LastFM(InMemoryDataset):
     def __init__(
         self,
         root: str,
+        with_embeddings: bool,
         transform: Optional[Callable] = None,
         pre_transform: Optional[Callable] = None,
     ) -> None:
         super().__init__(root, transform, pre_transform)
-        self.data = torch.load(self.processed_paths[0])#, data_cls=HeteroData)
+        if with_embeddings:
+            self.data = torch.load(self.processed_paths[0])[1]#, data_cls=HeteroData)
+        else:
+            self.data = torch.load(self.processed_paths[0])[0]
 
     @property
     def raw_file_names(self) -> List[str]:
@@ -73,6 +77,8 @@ class LastFM(InMemoryDataset):
     def process(self) -> None:
         data = Data()
         node_nums = {}
+
+        new_data = torch.load('data.pth')
 
         node_type_idx = np.load(osp.join(self.raw_dir, 'node_types.npy'))
         node_type_idx = torch.from_numpy(node_type_idx).to(torch.long)
@@ -160,16 +166,23 @@ class LastFM(InMemoryDataset):
         print(embeddings)
         print(N_a)
         print(data.x.dtype)
-        data.x = torch.cat((data.x, torch.cat((torch.zeros((N_u, 512)), torch.from_numpy(embeddings), torch.zeros((N_t, 512))), dim=0)), dim=1).to(torch.float32)
-        print(data.x.dtype)
-        print(data.x)
-        print(data.x.shape)
-        
+        data['edge_index'] = new_data['edge_index']
+        data['train_edge_index'] = new_data['train_edge_index']
+        data['train_edge_label'] = new_data['train_edge_label']
+        data['val_edge_index'] = new_data['val_edge_index']
+        data['val_edge_label'] = new_data['val_edge_label']
+        data['test_edge_index'] = new_data['test_edge_index']
+        data['test_edge_label'] = new_data['test_edge_label']
+
+        data_with_embeddings = data.clone()
+        data_with_embeddings.x = torch.cat((data_with_embeddings.x, torch.cat((torch.zeros((N_u, 512)), torch.from_numpy(embeddings), torch.zeros((N_t, 512))), dim=0)), dim=1).to(torch.float32)
 
         if self.pre_transform is not None:
             data = self.pre_transform(data)
+            data_with_embeddings = self.pre_transform(data_with_embeddings)
 
-        torch.save(data, self.processed_paths[0])
+        save_data = [data, data_with_embeddings]
+        torch.save(save_data, self.processed_paths[0])
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}()'
