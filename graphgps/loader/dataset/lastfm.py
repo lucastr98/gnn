@@ -161,7 +161,9 @@ class LastFM(InMemoryDataset):
             #nx_graph = to_networkx(data, node_attrs=["x"])
             #print([n for n in nx_graph.neighbors(N_u + 836)])
         
-        embeddings = np.load('clap_embeddings_17632artists.npy')
+        #embeddings = np.load('clap_embeddings_17632artists.npy')
+        embeddings = np.load('beats_embedding.npy')
+        print('Loaded embeddings')
         print(torch.from_numpy(embeddings).shape)
         print(embeddings)
         print(N_a)
@@ -175,7 +177,7 @@ class LastFM(InMemoryDataset):
         data['test_edge_label'] = new_data['test_edge_label']
 
         data_with_embeddings = data.clone()
-        data_with_embeddings.x = torch.cat((data_with_embeddings.x, torch.cat((torch.zeros((N_u, 512)), torch.from_numpy(embeddings), torch.zeros((N_t, 512))), dim=0)), dim=1).to(torch.float32)
+        data_with_embeddings.x = torch.cat((data_with_embeddings.x, torch.cat((torch.zeros((N_u, embeddings.shape[1])), torch.from_numpy(embeddings), torch.zeros((N_t, embeddings.shape[1]))), dim=0)), dim=1).to(torch.float32)
 
         if self.pre_transform is not None:
             data = self.pre_transform(data)
