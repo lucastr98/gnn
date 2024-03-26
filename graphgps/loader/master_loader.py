@@ -117,7 +117,7 @@ def load_dataset_master(format, name, dataset_dir):
             dataset = Planetoid(dataset_dir, name)
 
         elif pyg_dataset_id == 'LastFM':
-            dataset = LastFM(dataset_dir, with_embeddings=cfg.dataset.with_embeddings)
+            dataset = LastFM(dataset_dir, embedding=cfg.dataset.embedding)
 
         elif pyg_dataset_id == 'TUDataset':
             dataset = preformat_TUDataset(dataset_dir, name)

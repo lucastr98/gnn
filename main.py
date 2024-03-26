@@ -98,7 +98,7 @@ class LastFMSampler(torch.utils.data.DataLoader):
             index = torch.tensor(index)
 
 
-        edge_mask = torch.cat((torch.randperm(self.num_pos_edges)[:10000], torch.randperm(self.data.train_edge_index.shape[1]-self.num_pos_edges)[:10000]+self.num_pos_edges))
+        edge_mask = torch.cat((torch.randperm(self.num_pos_edges)[:cfg.dataset.num_pos_samples], torch.randperm(self.data.train_edge_index.shape[1]-self.num_pos_edges)[:cfg.dataset.num_neg_samples]+self.num_pos_edges))
         edge_index = self.data.train_edge_index[:, edge_mask]
         edge_label = self.data.train_edge_label[edge_mask]
 

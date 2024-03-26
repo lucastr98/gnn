@@ -48,15 +48,32 @@ class LastFM(InMemoryDataset):
     def __init__(
         self,
         root: str,
-        with_embeddings: bool,
+        embedding,
         transform: Optional[Callable] = None,
         pre_transform: Optional[Callable] = None,
     ) -> None:
         super().__init__(root, transform, pre_transform)
-        if with_embeddings:
-            self.data = torch.load(self.processed_paths[0])[1]#, data_cls=HeteroData)
+        self.data = torch.load(self.processed_paths[0])
+        N_u = 1892
+        N_a = 17632
+        N_t = 1088
+        if embedding == 'clap':
+            embeddings = np.load('clap_embeddings_17632artists.npy')
+            self.data.x = torch.cat((self.data.x, torch.cat((torch.zeros((N_u, embeddings.shape[1])), torch.from_numpy(embeddings), torch.zeros((N_t, embeddings.shape[1]))), dim=0)), dim=1).to(torch.float32)
+        elif embedding == 'beats':
+            embeddings = np.load('beats_embedding.npy')
+            self.data.x = torch.cat((self.data.x, torch.cat((torch.zeros((N_u, embeddings.shape[1])), torch.from_numpy(embeddings), torch.zeros((N_t, embeddings.shape[1]))), dim=0)), dim=1).to(torch.float32)
+        elif embedding is None:
+            pass
         else:
-            self.data = torch.load(self.processed_paths[0])[0]
+            print('Could not load embedding ' + embedding)
+            exit(0)
+
+        print(self.data['edge_index'].shape)
+        print(self.data['train_edge_label'].sum())
+        print(self.data['val_edge_label'].sum())
+        print(self.data['test_edge_label'].sum())
+
 
     @property
     def raw_file_names(self) -> List[str]:
@@ -94,6 +111,8 @@ class LastFM(InMemoryDataset):
         s['user'] = (0, N_u)
         s['artist'] = (N_u, N_u + N_a)
         s['tag'] = (N_u + N_a, N_u + N_a + N_t)
+
+        print(f'N_u = {N_u}, N_a = {N_a}, N_t = {N_t}')
 
         # Build the actual edge_index
         # TODO: Combine edges for different relationships into one
@@ -176,14 +195,14 @@ class LastFM(InMemoryDataset):
         data['test_edge_index'] = new_data['test_edge_index']
         data['test_edge_label'] = new_data['test_edge_label']
 
-        data_with_embeddings = data.clone()
-        data_with_embeddings.x = torch.cat((data_with_embeddings.x, torch.cat((torch.zeros((N_u, embeddings.shape[1])), torch.from_numpy(embeddings), torch.zeros((N_t, embeddings.shape[1]))), dim=0)), dim=1).to(torch.float32)
+        #data_with_embeddings = data.clone()
+        #data_with_embeddings.x = torch.cat((data_with_embeddings.x, torch.cat((torch.zeros((N_u, embeddings.shape[1])), torch.from_numpy(embeddings), torch.zeros((N_t, embeddings.shape[1]))), dim=0)), dim=1).to(torch.float32)
 
         if self.pre_transform is not None:
             data = self.pre_transform(data)
-            data_with_embeddings = self.pre_transform(data_with_embeddings)
+            #data_with_embeddings = self.pre_transform(data_with_embeddings)
 
-        save_data = [data, data_with_embeddings]
+        save_data = data
         torch.save(save_data, self.processed_paths[0])
 
     def __repr__(self) -> str:

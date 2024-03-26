@@ -22,4 +22,4 @@ def dataset_cfg(cfg):
 
     cfg.dataset.num_neg_samples = 100000
     
-    cfg.dataset.with_embeddings = True
+    cfg.dataset.embedding = None

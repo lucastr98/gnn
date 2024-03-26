@@ -7,6 +7,7 @@ from torch_geometric.graphgym.register import register_network
 
 from graphgps.layer.gatedgcn_layer import GatedGCNLayer
 from graphgps.layer.gine_conv_layer import GINEConvLayer
+from graphgps.layer.transformerconv_layer import TransformerConvLayer
 
 
 @register_network('custom_gnn')
@@ -46,6 +47,8 @@ class CustomGNN(torch.nn.Module):
             return GatedGCNLayer
         elif model_type == 'gineconv':
             return GINEConvLayer
+        elif model_type == 'transformerconv':
+            return TransformerConvLayer
         else:
             raise ValueError("Model {} unavailable".format(model_type))
 
