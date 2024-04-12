@@ -38,11 +38,17 @@ class OLGA(InMemoryDataset):
     def __init__(
         self,
         root: str,
+        embedding,
         transform: Optional[Callable] = None,
         pre_transform: Optional[Callable] = None,
     ) -> None:
         super().__init__(root, transform, pre_transform)
         self.data = torch.load(self.processed_paths[0])
+        if embedding is None:
+            pass
+        else:
+            print('embedding not None')
+            exit(0)
 
     @property
     def raw_file_names(self) -> List[str]:
@@ -65,7 +71,7 @@ class OLGA(InMemoryDataset):
 
     def process(self) -> None:
         # find all actual edges
-        ac = np.load(os.path.join(self.raw_dir, 'artist_connections.npz'))
+        ac = np.load(os.path.join(self.raw_dir, 'olga_data/artist_connections.npz'))
         indices = ac['indices']
         indptr = ac['indptr']
         data = ac['data']
