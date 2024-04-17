@@ -77,7 +77,7 @@ class OLGA(InMemoryDataset):
         data = ac['data']
         shape = ac['shape']
         sparse_matrix = scipy.sparse.csr_matrix((data, indices, indptr), shape=shape)
-        edges = torch.tensor(np.array((sparse_matrix.nonzero()[0], sparse_matrix.nonzero()[1])))
+        edges = torch.tensor(np.array((sparse_matrix.nonzero()[0], sparse_matrix.nonzero()[1])), dtype=int)
 
         # create train/val/test split for edges
         train_ratio = 0.72
@@ -97,8 +97,9 @@ class OLGA(InMemoryDataset):
         # get negative edges
         num_nodes = shape[0]
         pos_edges_set = set(zip(*sparse_matrix.nonzero()))
-        neg_edges_tups = [edge for edge in ((i, j) for i in range(num_nodes) for j in range(num_nodes) if i != j) if edge not in pos_edges_set]
-        neg_edges = torch.tensor(neg_edges_tups).T
+        # neg_edges_tups = [edge for edge in ((i, j) for i in range(num_nodes) for j in range(num_nodes) if i != j) if edge not in pos_edges_set]
+        neg_edges_tups = [edge for edge in ((i, j) for j in range(num_nodes) for i in range(j)) if edge not in pos_edges_set]
+        neg_edges = torch.tensor(neg_edges_tups, dtype=int).T
 
         # create data
         data = Data()
@@ -107,11 +108,11 @@ class OLGA(InMemoryDataset):
         neg_size = len(neg_edges_tups)
         neg_randperm = torch.randperm(neg_size)
         data['val_edge_index'] = torch.cat((val_edges, neg_edges[:, neg_randperm[:val_size]]), 1)
-        data['val_edge_label'] = torch.cat((torch.ones(val_size), torch.zeros(val_size)))
+        data['val_edge_label'] = torch.cat((torch.ones(val_size, dtype=int), torch.zeros(val_size, dtype=int)))
         data['test_edge_index'] = torch.cat((test_edges, neg_edges[:, neg_randperm[val_size:val_size+test_size]]), 1)
-        data['test_edge_label'] = torch.cat((torch.ones(test_size), torch.zeros(test_size)))
+        data['test_edge_label'] = torch.cat((torch.ones(test_size, dtype=int), torch.zeros(test_size, dtype=int)))
         data['train_edge_index'] = torch.cat((train_edges, neg_edges, val_edges, test_edges), 1)
-        data['train_edge_label'] = torch.cat((torch.ones(train_size), torch.zeros(neg_size + val_size + test_size)))
+        data['train_edge_label'] = torch.cat((torch.ones(train_size, dtype=int), torch.zeros(neg_size + val_size + test_size, dtype=int)))
 
         # save data
         torch.save(data, self.processed_paths[0])
