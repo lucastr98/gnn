@@ -139,7 +139,7 @@ class OLGA(InMemoryDataset):
         neg_train_edges_tuples = []
         for i in train_indices:
             for j in train_indices:
-                if (i < j) and (torch.tensor([i, j]) not in train_edges_torch):
+                if (i < j) and (torch.tensor([i, j]) not in train_edges_torch.T):
                     neg_train_edges_tuples.append((i, j))
         neg_train_edges_torch = torch.tensor(neg_train_edges_tuples, dtype=int).T
         data['train_edge_index'] = torch.cat((train_edges_torch, neg_train_edges_torch), 1)
@@ -149,7 +149,7 @@ class OLGA(InMemoryDataset):
         neg_val_check_edges_tuples = []
         for i in val_indices:
             for j in val_indices:
-                if (i < j) and (torch.tensor([i, j]) not in val_check_edges_torch):
+                if (i < j) and (torch.tensor([i, j]) not in val_check_edges_torch.T):
                     neg_val_check_edges_tuples.append((i, j))
         neg_val_check_edges_torch = torch.tensor(sample(neg_val_check_edges_tuples, len(val_check_edge_indices)), dtype=int).T
         data['val_edge_index'] = torch.cat((val_check_edges_torch, neg_val_check_edges_torch), 1)
@@ -159,7 +159,7 @@ class OLGA(InMemoryDataset):
         neg_test_check_edges_tuples = []
         for i in test_indices:
             for j in test_indices:
-                if (i < j) and (torch.tensor([i, j]) not in test_check_edges_torch):
+                if (i < j) and (torch.tensor([i, j]) not in test_check_edges_torch.T):
                     neg_test_check_edges_tuples.append((i, j))
         neg_test_check_edges_torch = torch.tensor(sample(neg_test_check_edges_tuples, len(test_check_edge_indices)), dtype=int).T
         data['test_edge_index'] = torch.cat((test_check_edges_torch, neg_test_check_edges_torch), 1)
