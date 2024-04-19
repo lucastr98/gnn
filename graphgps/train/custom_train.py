@@ -22,7 +22,7 @@ def train_epoch(logger, loader, model, optimizer, scheduler, batch_accumulation)
         batch.to(torch.device(cfg.accelerator))
         #print(batch)
         #batch.x = torch.zeros((batch.num_nodes,1), device=batch.edge_index.device)
-        pred, true = model(batch)
+        pred, true = model(batch) # of type LightningModule
         if cfg.dataset.name == 'ogbg-code2':
             loss, pred_score = subtoken_cross_entropy(pred, true)
             _true = true

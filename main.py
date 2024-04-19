@@ -105,6 +105,79 @@ class LastFMSampler(torch.utils.data.DataLoader):
         return Data(x=self.data.x, edge_index = self.edge_index, train_edge_index = edge_index, train_edge_label = edge_label, num_nodes=self.num_nodes, val_edge_index=self.data.val_edge_index, val_edge_label=self.data.val_edge_label, test_edge_index=self.data.test_edge_index, test_edge_label=self.data.test_edge_label)
 
 
+class OLGASampler(torch.utils.data.DataLoader):
+    r"""A data loader that randomly samples nodes within a graph and returns
+    their induced subgraph.
+
+    .. note::
+
+        For an example of using
+        :class:`~torch_geometric.loader.RandomNodeLoader`, see
+        `examples/ogbn_proteins_deepgcn.py
+        <https://github.com/pyg-team/pytorch_geometric/blob/master/examples/
+        ogbn_proteins_deepgcn.py>`_.
+
+    Args:
+        data (torch_geometric.data.Data or torch_geometric.data.HeteroData):
+            The :class:`~torch_geometric.data.Data` or
+            :class:`~torch_geometric.data.HeteroData` graph object.
+        num_parts (int): The number of partitions.
+        **kwargs (optional): Additional arguments of
+            :class:`torch.utils.data.DataLoader`, such as :obj:`num_workers`.
+    """
+    def __init__(
+        self,
+        data: Data,
+        split: str,
+        batch_size: int,
+        **kwargs,
+    ):
+        self.data = data
+        self.split = split
+        if split == 'train':
+            self.num_nodes = len(data.x_train)
+        elif split == 'val':
+            self.num_nodes = len(data.x_val)
+        elif split == 'test':
+            self.num_nodes = len(data.x_test)
+        else:
+            logging.warning(f"OLGASampler: split={split} not known")
+
+        super().__init__(
+            range(batch_size),
+            batch_size=1,
+            collate_fn=self.collate_fn,
+            **kwargs,
+        )
+
+    def collate_fn(self, index):
+        if not isinstance(index, Tensor):
+            index = torch.tensor(index)
+
+        if self.split == 'train':
+            num_pos_edges = (self.data.train_edge_label == 1).sum(dim=0)
+            edge_mask = torch.cat((torch.randperm(num_pos_edges)[:cfg.dataset.num_pos_samples], 
+                                   torch.randperm(self.data.train_edge_index.shape[1] - num_pos_edges)[:cfg.dataset.num_neg_samples] + num_pos_edges))
+            edge_index = self.data.train_edge_index[:, edge_mask]
+            edge_label = self.data.train_edge_label[edge_mask]
+            return Data(num_nodes=self.num_nodes, 
+                        x=self.data.x_train, 
+                        edge_index=self.data.edge_index_train,
+                        train_edge_index=edge_index, 
+                        train_edge_label=edge_label)
+        elif self.split == 'val':
+            return Data(num_nodes=self.num_nodes, 
+                        x=self.data.x_val, 
+                        edge_index=self.data.edge_index_val,
+                        val_edge_index=self.data.val_edge_index, 
+                        val_edge_label=self.data.val_edge_label)
+        elif self.split == 'test':
+            return Data(num_nodes=self.num_nodes, 
+                        x=self.data.x_test, 
+                        edge_index=self.data.edge_index_test,
+                        test_edge_index=self.data.test_edge_index, 
+                        test_edge_label=self.data.test_edge_label)
+
 
 def custom_create_loader(cfg):
     """Create data loader object.
@@ -118,13 +191,13 @@ def custom_create_loader(cfg):
         id = dataset.data['train_graph_index']
         loaders = [
             custom_get_loader(dataset[id], cfg.train.sampler, cfg.train.batch_size,
-                       shuffle=True)
+                       shuffle=True, split='train')
         ]
         delattr(dataset.data, 'train_graph_index')
     else:
         loaders = [
             custom_get_loader(dataset, cfg.train.sampler, cfg.train.batch_size,
-                       shuffle=True)
+                       shuffle=True, split='train')
         ]
 
     if True:
@@ -132,26 +205,27 @@ def custom_create_loader(cfg):
 
     # val and test loaders
     for i in range(cfg.share.num_splits - 1):
+        split = 'val' if i == 0 else 'test'
         if cfg.dataset.task == 'graph':
             split_names = ['val_graph_index', 'test_graph_index']
             id = dataset.data[split_names[i]]
             loaders.append(
                 custom_get_loader(dataset[id], cfg.val.sampler, val_test_size,
-                           shuffle=False))
+                           shuffle=False, split=split))
             delattr(dataset.data, split_names[i])
         else:
             loaders.append(
                 custom_get_loader(dataset, cfg.val.sampler, val_test_size,
-                           shuffle=False))
+                           shuffle=False, split=split))
 
     return loaders
 
-def custom_get_loader(dataset, sampler, batch_size, shuffle=True):
+def custom_get_loader(dataset, sampler, batch_size, shuffle=True, split='train'):
     pw = cfg.num_workers > 0
     if False:
         loader_train = get_loader(dataset, sampler, batch_size, shuffle)
     else:
-        loader_train = LastFMSampler(dataset[0],
+        loader_train = OLGASampler(dataset[0], split=split,
                                         shuffle=shuffle,
                                         batch_size=batch_size,
                                         pin_memory=True, persistent_workers=pw)
