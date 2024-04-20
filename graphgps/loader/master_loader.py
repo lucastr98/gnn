@@ -32,7 +32,7 @@ from graphgps.transform.transforms import (pre_transform_in_memory,
 def log_loaded_dataset(dataset, format, name):
     logging.info(f"[*] Loaded dataset '{name}' from '{format}':")
     logging.info(f"  {dataset.data}")
-    logging.info(f"  undirected: {dataset[0].is_undirected()}")
+    # logging.info(f"  undirected: {dataset[0].is_undirected()}")
     logging.info(f"  num graphs: {len(dataset)}")
 
     total_num_nodes = 0
