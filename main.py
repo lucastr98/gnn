@@ -164,19 +164,22 @@ class OLGASampler(torch.utils.data.DataLoader):
                         x=self.data.x_train, 
                         edge_index=self.data.edge_index_train,
                         train_edge_index=edge_index, 
-                        train_edge_label=edge_label)
+                        train_edge_label=edge_label,
+                        mapping=self.data.train_mapping)
         elif self.split == 'val':
             return Data(num_nodes=self.num_nodes, 
                         x=self.data.x_val, 
                         edge_index=self.data.edge_index_val,
                         val_edge_index=self.data.val_edge_index, 
-                        val_edge_label=self.data.val_edge_label)
+                        val_edge_label=self.data.val_edge_label,
+                        mapping=self.data.val_mapping)
         elif self.split == 'test':
             return Data(num_nodes=self.num_nodes, 
                         x=self.data.x_test, 
                         edge_index=self.data.edge_index_test,
                         test_edge_index=self.data.test_edge_index, 
-                        test_edge_label=self.data.test_edge_label)
+                        test_edge_label=self.data.test_edge_label,
+                        mapping=self.data.test_mapping)
 
 
 def custom_create_loader(cfg):

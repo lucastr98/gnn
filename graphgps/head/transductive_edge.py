@@ -63,7 +63,7 @@ class GNNTransductiveEdgeHead(torch.nn.Module):
 
         #    return batch.x[edge_index], edge_label
 
-        return batch.x[batch[index]], batch[label]
+        return batch.x[batch.mapping[batch[index]]], batch[label]
 
     def forward(self, batch):
         if cfg.model.edge_decoding != 'concat':

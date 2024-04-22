@@ -80,6 +80,7 @@ class OLGA(InMemoryDataset):
         sparse_matrix = scipy.sparse.csr_matrix((data, indices, indptr), shape=shape)
         edges = sparse_matrix.nonzero()
         edges_torch = torch.tensor(np.array((edges[0], edges[1])), dtype=int)
+        num_nodes = shape[0]
 
         # get train/val/test node split
         train_m = np.load(os.path.join(self.raw_dir, 'olga_data/train_mask.npz')) 
@@ -124,6 +125,18 @@ class OLGA(InMemoryDataset):
 
         # create Data
         data = Data()
+
+        # mapping of indices to location in x
+        train_mapping = val_mapping = test_mapping = [float('nan')] * num_nodes
+        for i in range(len(train_indices)):
+            train_mapping[train_indices[i]] = i
+        for i in range(len(val_indices)):
+            val_mapping[val_indices[i]] = i
+        for i in range(len(test_indices)):
+            test_mapping[test_indices[i]] = i
+        data['train_mapping'] = train_mapping
+        data['val_mapping'] = val_mapping
+        data['test_mapping'] = test_mapping
 
         # graphs
         data['edge_index_train'] = train_edges_torch
