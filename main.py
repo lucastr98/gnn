@@ -3,6 +3,7 @@ import os
 import torch
 import logging
 import math
+import numpy as np
 from typing import Union
 from torch_geometric.data import Data, HeteroData
 
@@ -156,16 +157,32 @@ class OLGASampler(torch.utils.data.DataLoader):
 
         if self.split == 'train':
             num_pos_edges = (self.data.train_edge_label == 1).sum(dim=0)
-            edge_mask = torch.cat((torch.randperm(num_pos_edges)[:cfg.dataset.num_pos_samples], 
-                                   torch.randperm(self.data.train_edge_index.shape[1] - num_pos_edges)[:cfg.dataset.num_neg_samples] + num_pos_edges))
-            edge_index = self.data.train_edge_index[:, edge_mask]
-            edge_label = self.data.train_edge_label[edge_mask]
+            pos_samples = self.data.train_edge_index[:, torch.randperm(num_pos_edges)[:cfg.dataset.num_pos_samples]]
+            neg_train_edges_tuples = []
+            for i in range(cfg.dataset.num_neg_samples):
+                v1, v2 = np.random.choice(self.data.train_indices, 2, replace=False)
+                while torch.tensor([min(v1, v2), max(v1, v2)]) in self.data.train_edge_index.T:
+                    v1, v2 = np.random.choice(self.data.train_indices, 2, replace=False)
+                neg_train_edges_tuples.append((min(v1, v2), max(v1, v2)))
+            neg_samples = torch.tensor(neg_train_edges_tuples, dtype=int).T
             return Data(num_nodes=self.num_nodes, 
                         x=self.data.x_train, 
                         edge_index=self.data.edge_index_train,
-                        train_edge_index=edge_index, 
-                        train_edge_label=edge_label,
+                        train_edge_index=pos_samples, 
+                        train_edge_label=neg_samples,
                         mapping=self.data.train_mapping)
+
+            # num_pos_edges = (self.data.train_edge_label == 1).sum(dim=0)
+            # edge_mask = torch.cat((torch.randperm(num_pos_edges)[:cfg.dataset.num_pos_samples], 
+            #                        torch.randperm(self.data.train_edge_index.shape[1] - num_pos_edges)[:cfg.dataset.num_neg_samples] + num_pos_edges))
+            # edge_index = self.data.train_edge_index[:, edge_mask]
+            # edge_label = self.data.train_edge_label[edge_mask]
+            # return Data(num_nodes=self.num_nodes, 
+            #             x=self.data.x_train, 
+            #             edge_index=self.data.edge_index_train,
+            #             train_edge_index=edge_index, 
+            #             train_edge_label=edge_label,
+            #             mapping=self.data.train_mapping)
         elif self.split == 'val':
             return Data(num_nodes=self.num_nodes, 
                         x=self.data.x_val, 
