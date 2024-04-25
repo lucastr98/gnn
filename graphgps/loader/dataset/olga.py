@@ -127,16 +127,18 @@ class OLGA(InMemoryDataset):
         data = Data()
 
         # mapping of indices to location in x
-        train_mapping = val_mapping = test_mapping = [float('nan')] * num_nodes
+        train_mapping = [float('nan')] * num_nodes
+        val_mapping = [float('nan')] * num_nodes
+        test_mapping = [float('nan')] * num_nodes
         for i in range(len(train_indices)):
             train_mapping[train_indices[i]] = i
         for i in range(len(val_indices)):
             val_mapping[val_indices[i]] = i
         for i in range(len(test_indices)):
             test_mapping[test_indices[i]] = i
-        data['train_mapping'] = train_mapping
-        data['val_mapping'] = val_mapping
-        data['test_mapping'] = test_mapping
+        data['train_mapping'] = torch.tensor(train_mapping)
+        data['val_mapping'] = torch.tensor(val_mapping)
+        data['test_mapping'] = torch.tensor(test_mapping)
 
         # graphs
         data['edge_index_train'] = train_edges_torch
