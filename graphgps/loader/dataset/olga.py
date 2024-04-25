@@ -123,67 +123,77 @@ class OLGA(InMemoryDataset):
         test_graph_edges_torch = edges_torch[:, torch.tensor(test_graph_edge_indices)]
         test_check_edges_torch = edges_torch[:, torch.tensor(test_check_edge_indices)]
 
+        # create mapping:
+        #   - train nodes should have indices [0, num_train_nodes - 1]
+        #   - val nodes should have indices [num_train_nodes, num_train_nodes + num_val_nodes - 1]
+        #   - test nodes should have indices [num_train_nodes + num_val_nods , num_train_nodes + num_val_nodes + num_test_nodes - 1]
+        # mapping holds a mapping from indices from dataset to indices as described above
+        mapping = [float('nan')] * num_nodes
+        for i in range(len(train_indices)):
+            mapping[train_indices[i]] = i
+        for i in range(len(val_indices)):
+            mapping[val_indices[i]] = num_train_nodes + i
+        for i in range(len(test_indices)):
+            mapping[test_indices[i]] = num_train_nodes + num_val_nodes + i
+        mapping_torch = torch.tensor(mapping)
+
+        # apply mapping to all edges
+        mapped_train_edges_torch = mapping_torch[train_edges_torch].long()
+        mapped_val_graph_edges_torch = mapping_torch[val_graph_edges_torch].long()
+        mapped_val_check_edges_torch = mapping_torch[val_check_edges_torch].long()
+        mapped_test_graph_edges_torch = mapping_torch[test_graph_edges_torch].long()
+        mapped_test_check_edges_torch = mapping_torch[test_check_edges_torch].long()
+
         # create Data
         data = Data()
 
-        # mapping of indices to location in x
-        train_mapping = [float('nan')] * num_nodes
-        val_mapping = [float('nan')] * num_nodes
-        test_mapping = [float('nan')] * num_nodes
-        for i in range(len(train_indices)):
-            train_mapping[train_indices[i]] = i
-        for i in range(len(val_indices)):
-            val_mapping[val_indices[i]] = i
-        for i in range(len(test_indices)):
-            test_mapping[test_indices[i]] = i
-        data['train_mapping'] = torch.tensor(train_mapping)
-        data['val_mapping'] = torch.tensor(val_mapping)
-        data['test_mapping'] = torch.tensor(test_mapping)
-
-        # graphs
-        data['edge_index_train'] = train_edges_torch
-        data['edge_index_val'] = torch.cat((train_edges_torch, val_graph_edges_torch), 1)
-        data['edge_index_test'] = torch.cat((train_edges_torch, val_graph_edges_torch, val_check_edges_torch, test_graph_edges_torch), 1)
-
-        # features
+        # features (trivial at the moment)
+        # Comment: x_test is called x such that graphgym derives correct cfg.share.dim_in
         data['x_train'] = torch.nn.functional.one_hot((torch.zeros(num_train_nodes, dtype=int)), num_classes=3).float()
         data['x_val'] = torch.nn.functional.one_hot((torch.zeros(num_train_nodes + num_val_nodes, dtype=int)), num_classes=3).float()
-        data['x_test'] = torch.nn.functional.one_hot((torch.zeros(num_train_nodes + num_val_nodes + num_test_nodes, dtype=int)), num_classes=3).float()
+        data['x'] = torch.nn.functional.one_hot((torch.zeros(num_train_nodes + num_val_nodes + num_test_nodes, dtype=int)), num_classes=3).float()
 
-        # training data (sampled from in main)
-        # neg_train_edges_tuples = []
-        # for i in train_indices:
-        #     for j in train_indices:
-        #         if (i < j) and (torch.tensor([i, j]) not in train_edges_torch.T):
-        #             neg_train_edges_tuples.append((i, j))
-        # neg_train_edges_torch = torch.tensor(neg_train_edges_tuples, dtype=int).T
-        # data['train_edge_index'] = torch.cat((train_edges_torch, neg_train_edges_torch), 1)
-        # data['train_edge_label'] = torch.cat((torch.ones(len(train_edge_indices), dtype=int), torch.zeros(len(neg_train_edges_tuples), dtype=int)))
-        data['train_edge_index'] = train_edges_torch
-        data['train_edge_label'] = torch.ones(len(train_edge_indices), dtype=int)
-        data['train_indices'] = train_indices
+        # graph for message passing
+        data['edge_index_train'] = mapped_train_edges_torch
+        data['edge_index_val'] = torch.cat((mapped_train_edges_torch, 
+                                            mapped_val_graph_edges_torch), 1)
+        data['edge_index_test'] = torch.cat((mapped_train_edges_torch, 
+                                             mapped_val_graph_edges_torch, 
+                                             mapped_val_check_edges_torch, 
+                                             mapped_test_graph_edges_torch), 1)
+        
+        # edges to predict with label
+        #   - train: only positive edges, negative edges are sampled in OLGASampler in main
+        #   - val: positive edges and same number of negative edges randomly sampled here
+        #   - test: positive edges and same number of negative edges randomly sampled here
+        data['pos_train_edge_index'] = mapped_train_edges_torch
+        # data['train_edge_label'] = torch.ones(len(train_edge_indices), dtype=int)
 
-        # validation data
-        neg_val_check_edges_tuples = []
-        for i in range(len(val_check_edge_indices)):
-            v1, v2 = np.random.choice(val_indices, 2, replace=False)
-            while torch.tensor([min(v1, v2), max(v1, v2)]) in val_check_edges_torch.T:
-                v1, v2 = np.random.choice(val_indices, 2, replace=False)
-            neg_val_check_edges_tuples.append((min(v1, v2), max(v1, v2)))
-        neg_val_check_edges_torch = torch.tensor(neg_val_check_edges_tuples, dtype=int).T
-        data['val_edge_index'] = torch.cat((val_check_edges_torch, neg_val_check_edges_torch), 1)
-        data['val_edge_label'] = torch.cat((torch.ones(len(val_check_edge_indices), dtype=int), torch.zeros(len(val_check_edge_indices), dtype=int)))
+        mapped_neg_val_check_edges_tuples = []
+        mapped_val_indices = range(num_train_nodes, num_train_nodes + num_val_nodes)
+        num_val_edges_each = len(val_check_edge_indices)
+        for i in range(num_val_edges_each):
+            v1, v2 = np.random.choice(mapped_val_indices, 2, replace=False)
+            while torch.tensor([min(v1, v2), max(v1, v2)]) in mapped_val_check_edges_torch.T:
+                v1, v2 = np.random.choice(mapped_val_indices, 2, replace=False)
+            mapped_neg_val_check_edges_tuples.append((min(v1, v2), max(v1, v2)))
+        mapped_neg_val_check_edges_torch = torch.tensor(mapped_neg_val_check_edges_tuples, dtype=int).T
+        data['val_edge_index'] = torch.cat((mapped_val_check_edges_torch, mapped_neg_val_check_edges_torch), 1)
+        data['val_edge_label'] = torch.cat((torch.ones(num_val_edges_each, dtype=int), 
+                                            torch.zeros(num_val_edges_each, dtype=int)))
 
-        # testing data
-        neg_test_check_edges_tuples = []
-        for i in range(len(test_check_edge_indices)):
-            v1, v2 = np.random.choice(test_indices, 2, replace=False)
-            while torch.tensor([min(v1, v2), max(v1, v2)]) in test_check_edges_torch.T:
-                v1, v2 = np.random.choice(test_indices, 2, replace=False)
-            neg_test_check_edges_tuples.append((min(v1, v2), max(v1, v2)))
-        neg_test_check_edges_torch = torch.tensor(neg_test_check_edges_tuples, dtype=int).T
-        data['test_edge_index'] = torch.cat((test_check_edges_torch, neg_test_check_edges_torch), 1)
-        data['test_edge_label'] = torch.cat((torch.ones(len(test_check_edge_indices), dtype=int), torch.zeros(len(test_check_edge_indices), dtype=int)))
+        mapped_neg_test_check_edges_tuples = []
+        mapped_test_indices = range(num_train_nodes + num_val_nodes, num_train_nodes + num_val_nodes + num_test_nodes)
+        num_test_edges_each = len(test_check_edge_indices)
+        for i in range(num_test_edges_each):
+            v1, v2 = np.random.choice(mapped_test_indices, 2, replace=False)
+            while torch.tensor([min(v1, v2), max(v1, v2)]) in mapped_test_check_edges_torch.T:
+                v1, v2 = np.random.choice(mapped_test_indices, 2, replace=False)
+            mapped_neg_test_check_edges_tuples.append((min(v1, v2), max(v1, v2)))
+        mapped_neg_test_check_edges_torch = torch.tensor(mapped_neg_test_check_edges_tuples, dtype=int).T
+        data['test_edge_index'] = torch.cat((mapped_test_check_edges_torch, mapped_neg_test_check_edges_torch), 1)
+        data['test_edge_label'] = torch.cat((torch.ones(num_test_edges_each, dtype=int), 
+                                            torch.zeros(num_test_edges_each, dtype=int)))
 
         # save data
         torch.save(data, self.processed_paths[0])
