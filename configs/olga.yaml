@@ -19,6 +19,7 @@ dataset:
   num_pos_samples: 15000
   num_neg_samples: 85000
   embedding: None
+  split_mode: custom
 train:
   mode: custom
   batch_size: 16
