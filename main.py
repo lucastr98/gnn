@@ -164,13 +164,13 @@ class OLGASampler(torch.utils.data.DataLoader):
             index = torch.tensor(index)
 
         if self.split == 'train':
-            num_pos_edges = self.data.train_edge_index.shape[1]
-            pos_samples = self.data.train_edge_index[:, torch.randperm(num_pos_edges)[:cfg.dataset.num_pos_samples]]
+            num_pos_edges = self.data.pos_train_edge_index.shape[1]
+            pos_samples = self.data.pos_train_edge_index[:, torch.randperm(num_pos_edges)[:cfg.dataset.num_pos_samples]]
             neg_train_edges_tuples = []
             mapped_train_indices = range(0, self.num_nodes)
             for i in range(cfg.dataset.num_neg_samples):
                 v1, v2 = np.random.choice(mapped_train_indices, 2, replace=False)
-                while torch.tensor([min(v1, v2), max(v1, v2)]) in self.data.train_edge_index.T:
+                while torch.tensor([min(v1, v2), max(v1, v2)]) in self.data.pos_train_edge_index.T:
                     v1, v2 = np.random.choice(mapped_train_indices, 2, replace=False)
                 neg_train_edges_tuples.append((min(v1, v2), max(v1, v2)))
             neg_samples = torch.tensor(neg_train_edges_tuples, dtype=int).T
