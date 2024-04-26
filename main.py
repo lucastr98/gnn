@@ -166,7 +166,7 @@ class OLGASampler(torch.utils.data.DataLoader):
         if self.split == 'train':
             num_pos_edges = (self.data.train_edge_label == 1).sum(dim=0)
             edge_mask = torch.cat((torch.randperm(num_pos_edges)[:cfg.dataset.num_pos_samples], 
-                                   torch.randperm(self.data.train_edge_index.shape[1]-self.num_pos_edges)[:cfg.dataset.num_neg_samples]+self.num_pos_edges))
+                                   torch.randperm(self.data.train_edge_index.shape[1]-num_pos_edges)[:cfg.dataset.num_neg_samples]+num_pos_edges))
             train_edge_index = self.data.train_edge_index[:, edge_mask]
             train_edge_label = self.data.train_edge_label[edge_mask]
             return Data(num_nodes=self.num_nodes, 
