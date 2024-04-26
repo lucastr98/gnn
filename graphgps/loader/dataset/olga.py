@@ -8,6 +8,9 @@ import scipy.sparse
 from random import sample
 import torch
 
+import time
+import logging
+
 from torch_geometric.utils import to_networkx
 
 from torch_geometric.data import (
@@ -166,15 +169,26 @@ class OLGA(InMemoryDataset):
         #   - train: only positive edges, negative edges are sampled in OLGASampler in main
         #   - val: positive edges and same number of negative edges randomly sampled here
         #   - test: positive edges and same number of negative edges randomly sampled here
-        data['pos_train_edge_index'] = mapped_train_edges_torch
+
+        # data['pos_train_edge_index'] = mapped_train_edges_torch
         # data['train_edge_label'] = torch.ones(len(train_edge_indices), dtype=int)
+        start_t = time.time()
+        mapped_train_edges_set = {(int(edge[0]), int(edge[1])) for edge in mapped_train_edges_torch.T}
+        mapped_neg_train_edges= [edge for edge in ((i, j) for j in range(num_train_nodes) for i in range(j)) if edge not in mapped_train_edges_set]
+        mapped_neg_train_edges_torch = torch.tensor(mapped_neg_train_edges, dtype=int).T
+        data['train_edge_index'] = torch.cat((mapped_train_edges_torch, mapped_neg_train_edges_torch), 1)
+        data['train_edge_label'] = torch.cat((torch.ones(len(mapped_train_edges_set), dtype=int), 
+                                              torch.zeros(len(mapped_neg_train_edges), dtype=int)))
+        logging.info(f"time for neg edges: {time.time() - start_t} seconds")
+
 
         mapped_neg_val_check_edges_tuples = []
         mapped_val_indices = range(num_train_nodes, num_train_nodes + num_val_nodes)
         num_val_edges_each = len(val_check_edge_indices)
+        mapped_val_check_edges_lst = mapped_val_check_edges_torch.T.tolist()
         for i in range(num_val_edges_each):
             v1, v2 = np.random.choice(mapped_val_indices, 2, replace=False)
-            while torch.tensor([min(v1, v2), max(v1, v2)]) in mapped_val_check_edges_torch.T:
+            while [min(v1, v2), max(v1, v2)] in mapped_val_check_edges_lst:
                 v1, v2 = np.random.choice(mapped_val_indices, 2, replace=False)
             mapped_neg_val_check_edges_tuples.append((min(v1, v2), max(v1, v2)))
         mapped_neg_val_check_edges_torch = torch.tensor(mapped_neg_val_check_edges_tuples, dtype=int).T
@@ -185,9 +199,10 @@ class OLGA(InMemoryDataset):
         mapped_neg_test_check_edges_tuples = []
         mapped_test_indices = range(num_train_nodes + num_val_nodes, num_train_nodes + num_val_nodes + num_test_nodes)
         num_test_edges_each = len(test_check_edge_indices)
+        mapped_test_check_edges_lst = mapped_test_check_edges_torch.T.tolist()
         for i in range(num_test_edges_each):
             v1, v2 = np.random.choice(mapped_test_indices, 2, replace=False)
-            while torch.tensor([min(v1, v2), max(v1, v2)]) in mapped_test_check_edges_torch.T:
+            while [min(v1, v2), max(v1, v2)] in mapped_test_check_edges_lst:
                 v1, v2 = np.random.choice(mapped_test_indices, 2, replace=False)
             mapped_neg_test_check_edges_tuples.append((min(v1, v2), max(v1, v2)))
         mapped_neg_test_check_edges_torch = torch.tensor(mapped_neg_test_check_edges_tuples, dtype=int).T
