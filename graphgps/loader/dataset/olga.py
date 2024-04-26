@@ -8,7 +8,6 @@ import scipy.sparse
 from random import sample
 import torch
 
-import time
 import logging
 
 from torch_geometric.utils import to_networkx
@@ -172,14 +171,13 @@ class OLGA(InMemoryDataset):
 
         # data['pos_train_edge_index'] = mapped_train_edges_torch
         # data['train_edge_label'] = torch.ones(len(train_edge_indices), dtype=int)
-        start_t = time.time()
         mapped_train_edges_set = {(int(edge[0]), int(edge[1])) for edge in mapped_train_edges_torch.T}
         mapped_neg_train_edges= [edge for edge in ((i, j) for j in range(num_train_nodes) for i in range(j)) if edge not in mapped_train_edges_set]
         mapped_neg_train_edges_torch = torch.tensor(mapped_neg_train_edges, dtype=int).T
         data['train_edge_index'] = torch.cat((mapped_train_edges_torch, mapped_neg_train_edges_torch), 1)
         data['train_edge_label'] = torch.cat((torch.ones(len(mapped_train_edges_set), dtype=int), 
                                               torch.zeros(len(mapped_neg_train_edges), dtype=int)))
-        logging.info(f"time for neg edges: {time.time() - start_t} seconds")
+        logging.info(f"number neg edges: {len(mapped_neg_train_edges)}")
 
 
         mapped_neg_val_check_edges_tuples = []
