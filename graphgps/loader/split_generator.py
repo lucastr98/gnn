@@ -27,6 +27,8 @@ def prepare_splits(dataset):
         setup_fixed_split(dataset)
     elif split_mode == "sliced":
         setup_sliced_split(dataset)
+    elif split_mode == "custom":
+        logging.info("using custom split mode")
     else:
         raise ValueError(f"Unknown split mode: {split_mode}")
 
