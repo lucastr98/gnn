@@ -21,5 +21,15 @@ def dataset_cfg(cfg):
     cfg.dataset.num_pos_samples = 10000
 
     cfg.dataset.num_neg_samples = 100000
+
+    cfg.dataset.num_samples = 100000
+
+    # can be one or two
+    #   - one: samples one negative edge randomly from all edges involving one 
+    #          of the two edges of the positive edge
+    #   - two: samples two negative edges randomly, one from all edges involving
+    #          the first node and one from all edges involving the second node
+    #          of the positive edge
+    cfg.dataset.triplets_per_edge = "two"
     
     cfg.dataset.embedding = None
