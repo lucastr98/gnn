@@ -13,24 +13,28 @@ from graphgps.loss.subtoken_prediction_loss import subtoken_cross_entropy
 from graphgps.utils import cfg_to_dict, flatten_dict, make_wandb_name
 
 
-def train_epoch(logger, loader, model, optimizer, scheduler, batch_accumulation):
+def train_epoch(logger, loader, model, optimizer, scheduler, batch_accumulation, triplet_loss=None):
     model.train()
     optimizer.zero_grad()
     time_start = time.time()
     for iter, batch in enumerate(loader):
         batch.split = 'train'
         batch.to(torch.device(cfg.accelerator))
-        #print(batch)
-        #batch.x = torch.zeros((batch.num_nodes,1), device=batch.edge_index.device)
-        pred, true = model(batch) # of type LightningModule
-        if cfg.dataset.name == 'ogbg-code2':
-            loss, pred_score = subtoken_cross_entropy(pred, true)
-            _true = true
-            _pred = pred_score
-        else:
-            loss, pred_score = compute_loss(pred, true)
+        if cfg.dataset.name == "PyG-OLGA_triplet":
+            x_triplets, pred, true = model(batch)
             _true = true.detach().to('cpu', non_blocking=True)
-            _pred = pred_score.detach().to('cpu', non_blocking=True)
+            _pred = torch.nn.functional.log_softmax(pred, dim=-1).detach().to('cpu', non_blocking=True)
+            loss = triplet_loss(x_triplets[0], x_triplets[1], x_triplets[2])
+        else:
+            pred, true = model(batch) # of type LightningModule
+            if cfg.dataset.name == 'ogbg-code2':
+                loss, pred_score = subtoken_cross_entropy(pred, true)
+                _true = true
+                _pred = pred_score
+            else:
+                loss, pred_score = compute_loss(pred, true)
+                _true = true.detach().to('cpu', non_blocking=True)
+                _pred = pred_score.detach().to('cpu', non_blocking=True)
         loss.backward()
         # Parameters update after accumulating gradients for given num. batches.
         if ((iter + 1) % batch_accumulation == 0) or (iter + 1 == len(loader)):
@@ -50,27 +54,34 @@ def train_epoch(logger, loader, model, optimizer, scheduler, batch_accumulation)
 
 
 @torch.no_grad()
-def eval_epoch(logger, loader, model, split='val'):
+def eval_epoch(logger, loader, model, split='val', triplet_loss=None):
     model.eval()
     time_start = time.time()
     for batch in loader:
         batch.split = split
         batch.to(torch.device(cfg.accelerator))
-        if cfg.gnn.head == 'inductive_edge':
-            pred, true, extra_stats = model(batch)
-        else:
-            #print(batch)
-            #batch.x = torch.zeros((batch.num_nodes,1), device=batch.edge_index.device)
-            pred, true = model(batch)
+        if cfg.dataset.name == "PyG-OLGA_triplet":
+            x_triplets, pred, true = model(batch)
             extra_stats = {}
-        if cfg.dataset.name == 'ogbg-code2':
-            loss, pred_score = subtoken_cross_entropy(pred, true)
-            _true = true
-            _pred = pred_score
-        else:
-            loss, pred_score = compute_loss(pred, true)
             _true = true.detach().to('cpu', non_blocking=True)
-            _pred = pred_score.detach().to('cpu', non_blocking=True)
+            _pred = torch.nn.functional.log_softmax(pred, dim=-1).detach().to('cpu', non_blocking=True)
+            loss = triplet_loss(x_triplets[0], x_triplets[1], x_triplets[2])
+        else:
+            if cfg.gnn.head == 'inductive_edge':
+                pred, true, extra_stats = model(batch)
+            else:
+                #print(batch)
+                #batch.x = torch.zeros((batch.num_nodes,1), device=batch.edge_index.device)
+                pred, true = model(batch)
+                extra_stats = {}
+            if cfg.dataset.name == 'ogbg-code2':
+                loss, pred_score = subtoken_cross_entropy(pred, true)
+                _true = true
+                _pred = pred_score
+            else:
+                loss, pred_score = compute_loss(pred, true)
+                _true = true.detach().to('cpu', non_blocking=True)
+                _pred = pred_score.detach().to('cpu', non_blocking=True)
         logger.update_stats(true=_true,
                             pred=_pred,
                             loss=loss.detach().cpu().item(),
@@ -82,7 +93,7 @@ def eval_epoch(logger, loader, model, split='val'):
 
 
 @register_train('custom')
-def custom_train(loggers, loaders, model, optimizer, scheduler):
+def custom_train(loggers, loaders, model, optimizer, scheduler, loss=None):
     """
     Customized training pipeline.
 
@@ -122,14 +133,22 @@ def custom_train(loggers, loaders, model, optimizer, scheduler):
     perf = [[] for _ in range(num_splits)]
     for cur_epoch in range(start_epoch, cfg.optim.max_epoch):
         start_time = time.perf_counter()
-        train_epoch(loggers[0], loaders[0], model, optimizer, scheduler,
-                    cfg.optim.batch_accumulation)
+        if cfg.dataset.name == 'PyG-OLGA_triplet':
+            train_epoch(loggers[0], loaders[0], model, optimizer, scheduler,
+                        cfg.optim.batch_accumulation, loss)
+        else:
+            train_epoch(loggers[0], loaders[0], model, optimizer, scheduler,
+                        cfg.optim.batch_accumulation)
         perf[0].append(loggers[0].write_epoch(cur_epoch))
 
         if is_eval_epoch(cur_epoch):
             for i in range(1, num_splits):
-                eval_epoch(loggers[i], loaders[i], model,
-                           split=split_names[i - 1])
+                if cfg.dataset.name == 'PyG-OLGA_triplet':
+                    eval_epoch(loggers[i], loaders[i], model,
+                              split=split_names[i - 1], triplet_loss=loss)
+                else:
+                    eval_epoch(loggers[i], loaders[i], model,
+                              split=split_names[i - 1])
                 perf[i].append(loggers[i].write_epoch(cur_epoch))
         else:
             for i in range(1, num_splits):

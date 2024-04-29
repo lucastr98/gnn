@@ -6,6 +6,8 @@ import math
 import numpy as np
 from typing import Union
 from torch_geometric.data import Data, HeteroData
+from torch_geometric.utils import structured_negative_sampling
+import torch.nn as nn
 
 import graphgps  # noqa, register custom modules
 from graphgps.agg_runs import agg_runs
@@ -188,6 +190,87 @@ class OLGASampler(torch.utils.data.DataLoader):
                         test_edge_label=self.data.test_edge_label)
 
 
+class OLGATripletSampler(torch.utils.data.DataLoader):
+    r"""A data loader that randomly samples nodes within a graph and returns
+    their induced subgraph.
+
+    .. note::
+
+        For an example of using
+        :class:`~torch_geometric.loader.RandomNodeLoader`, see
+        `examples/ogbn_proteins_deepgcn.py
+        <https://github.com/pyg-team/pytorch_geometric/blob/master/examples/
+        ogbn_proteins_deepgcn.py>`_.
+
+    Args:
+        data (torch_geometric.data.Data or torch_geometric.data.HeteroData):
+            The :class:`~torch_geometric.data.Data` or
+            :class:`~torch_geometric.data.HeteroData` graph object.
+        num_parts (int): The number of partitions.
+        **kwargs (optional): Additional arguments of
+            :class:`torch.utils.data.DataLoader`, such as :obj:`num_workers`.
+    """
+    def __init__(
+        self,
+        data: Data,
+        split: str,
+        batch_size: int,
+        **kwargs,
+    ):
+        self.data = data
+        self.split = split
+        if split == 'train':
+            self.num_nodes = len(data.x_train)
+        elif split == 'val':
+            self.num_nodes = len(data.x_val)
+        elif split == 'test':
+            self.num_nodes = len(data.x)
+        else:
+            logging.warning(f"OLGATripletSampler: split={split} not known")
+
+        super().__init__(
+            range(batch_size),
+            batch_size=1,
+            collate_fn=self.collate_fn,
+            **kwargs,
+        )
+
+    def collate_fn(self, index):
+        if not isinstance(index, Tensor):
+            index = torch.tensor(index)
+
+        if self.split == 'train':
+            if cfg.dataset.triplets_per_edge == "two":
+                edge_mask = torch.randperm(self.data.train_edge_index.size(1))[:int(cfg.dataset.num_samples/2)]
+                train_edge_sample= self.data.train_edge_index[:, edge_mask]
+                train_edges = torch.cat((train_edge_sample,
+                                         train_edge_sample[[1, 0]]), 1)
+            else:
+                edge_mask = torch.randperm(self.data.train_edge_index.size(1))[:cfg.dataset.num_samples]
+                train_edge_sample= self.data.train_edge_index[:, edge_mask]
+                swap_mask = torch.rand(train_edge_sample.size(1)) > 0.5
+                train_edges = train_edge_sample.clone()
+                train_edges[0, swap_mask], train_edges[1, swap_mask] = \
+                    train_edge_sample[1, swap_mask], train_edge_sample[0, swap_mask]
+            a, p, n = structured_negative_sampling(train_edges, 
+                                                   num_nodes=self.num_nodes, 
+                                                   contains_neg_self_loops=False)
+            return Data(num_nodes=self.num_nodes, 
+                        x=self.data.x_train, 
+                        edge_index=self.data.edge_index_train,
+                        train_triplet=torch.stack((a, p, n)))
+        elif self.split == 'val':
+            return Data(num_nodes=self.num_nodes, 
+                        x=self.data.x_val, 
+                        edge_index=self.data.edge_index_val,
+                        val_triplet=self.data.val_triplets)
+        elif self.split == 'test':
+            return Data(num_nodes=self.num_nodes, 
+                        x=self.data.x, 
+                        edge_index=self.data.edge_index_test,
+                        test_triplet=self.data.test_triplets)
+
+
 def custom_create_loader(cfg):
     """Create data loader object.
 
@@ -200,13 +283,13 @@ def custom_create_loader(cfg):
         id = dataset.data['train_graph_index']
         loaders = [
             custom_get_loader(dataset[id], cfg.train.sampler, cfg.train.batch_size,
-                       shuffle=True, split='train')
+                       shuffle=True, split='train', name=cfg.dataset.name)
         ]
         delattr(dataset.data, 'train_graph_index')
     else:
         loaders = [
             custom_get_loader(dataset, cfg.train.sampler, cfg.train.batch_size,
-                       shuffle=True, split='train')
+                       shuffle=True, split='train', name=cfg.dataset.name)
         ]
 
     if True:
@@ -220,24 +303,29 @@ def custom_create_loader(cfg):
             id = dataset.data[split_names[i]]
             loaders.append(
                 custom_get_loader(dataset[id], cfg.val.sampler, val_test_size,
-                           shuffle=False, split=split))
+                           shuffle=False, split=split, name=cfg.dataset.name))
             delattr(dataset.data, split_names[i])
         else:
             loaders.append(
                 custom_get_loader(dataset, cfg.val.sampler, val_test_size,
-                           shuffle=False, split=split))
+                           shuffle=False, split=split, name=cfg.dataset.name))
 
     return loaders
 
-def custom_get_loader(dataset, sampler, batch_size, shuffle=True, split='train'):
+def custom_get_loader(dataset, sampler, batch_size, shuffle=True, split='train', name=''):
     pw = cfg.num_workers > 0
-    if False:
-        loader_train = get_loader(dataset, sampler, batch_size, shuffle)
-    else:
+    if name == 'PyG-OLGA':
         loader_train = OLGASampler(dataset[0], split=split,
-                                        shuffle=shuffle,
-                                        batch_size=batch_size,
-                                        pin_memory=True, persistent_workers=pw)
+                                   shuffle=shuffle,
+                                   batch_size=batch_size,
+                                   pin_memory=True, persistent_workers=pw)
+    elif name == 'PyG-OLGA_triplet':
+        loader_train = OLGATripletSampler(dataset[0], split=split,
+                                          shuffle=shuffle,
+                                          batch_size=batch_size,
+                                          pin_memory=True, persistent_workers=pw)
+    else:
+        loader_train = get_loader(dataset, sampler, batch_size, shuffle)
 
     return loader_train
 
@@ -345,6 +433,8 @@ if __name__ == '__main__':
         optimizer = create_optimizer(model.parameters(),
                                      new_optimizer_config(cfg))
         scheduler = create_scheduler(optimizer, new_scheduler_config(cfg))
+        if cfg.dataset.name == 'PyG-OLGA_triplet':
+            loss = nn.TripletMarginLoss()
         # Print model info
         logging.info(model)
         logging.info(cfg)
@@ -358,8 +448,12 @@ if __name__ == '__main__':
             datamodule = GraphGymDataModule()
             train(model, datamodule, logger=True)
         else:
-            train_dict[cfg.train.mode](loggers, loaders, model, optimizer,
-                                       scheduler)
+            if cfg.dataset.name == 'PyG-OLGA_triplet':
+                train_dict[cfg.train.mode](loggers, loaders, model, optimizer,
+                                          scheduler, loss)
+            else:
+                train_dict[cfg.train.mode](loggers, loaders, model, optimizer,
+                                          scheduler)
     # Aggregate results from different seeds
     try:
         agg_runs(cfg.out_dir, cfg.metric_best)
