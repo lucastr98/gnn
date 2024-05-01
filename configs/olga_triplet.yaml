@@ -48,4 +48,4 @@ optim:
   reduce_factor: 0.5
   schedule_patience: 20
   min_lr: 1e-5
-  triplet_loss_margin: 1
+  triplet_loss_margin: 1.0
