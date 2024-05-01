@@ -31,16 +31,9 @@ def train_epoch(logger, loader, model, optimizer, scheduler, batch_accumulation,
                 pred = torch.sigmoid(pred)
             _pred = pred.detach().to('cpu', non_blocking=True)
 
-            anchor = x_triplets[0]
-            positive = x_triplets[1]
-            negative = x_triplets[2]
-            anchor = torch.nn.functional.normalize(anchor, p=2, dim=1)
-            positive = torch.nn.functional.normalize(positive, p=2, dim=1)
-            negative = torch.nn.functional.normalize(negative, p=2, dim=1)
-            anchor.requires_grad_(True)
-            positive.requires_grad_(True)
-            negative.requires_grad_(True)
-
+            anchor = torch.nn.functional.normalize(x_triplets[0], p=2, dim=1)
+            positive = torch.nn.functional.normalize(x_triplets[1], p=2, dim=1)
+            negative = torch.nn.functional.normalize(x_triplets[2], p=2, dim=1)
             loss = triplet_loss(anchor, positive, negative)
         else:
             pred, true = model(batch) # of type LightningModule
@@ -89,7 +82,10 @@ def eval_epoch(logger, loader, model, split='val', triplet_loss=None):
                 pred = torch.sigmoid(pred)
             _pred = pred.detach().to('cpu', non_blocking=True)
 
-            loss = triplet_loss(x_triplets[0], x_triplets[1], x_triplets[2])
+            anchor = torch.nn.functional.normalize(x_triplets[0], p=2, dim=1)
+            positive = torch.nn.functional.normalize(x_triplets[1], p=2, dim=1)
+            negative = torch.nn.functional.normalize(x_triplets[2], p=2, dim=1)
+            loss = triplet_loss(anchor, positive, negative)
         else:
             if cfg.gnn.head == 'inductive_edge':
                 pred, true, extra_stats = model(batch)

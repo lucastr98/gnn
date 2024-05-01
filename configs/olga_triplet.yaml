@@ -16,7 +16,7 @@ dataset:
   edge_encoder: True
   edge_encoder_name: DummyEdge
   edge_encoder_bn: False
-  num_samples: 100000
+  # num_samples: 100000
   embedding: None
   split_mode: custom
   triplets_per_edge: two
@@ -48,3 +48,4 @@ optim:
   reduce_factor: 0.5
   schedule_patience: 20
   min_lr: 1e-5
+  triplet_loss_margin: 1
