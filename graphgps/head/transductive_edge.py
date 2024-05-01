@@ -47,7 +47,11 @@ class GNNTransductiveEdgeHead(torch.nn.Module):
                 self.output_layer = Linear(
                     new_layer_config(
                         dim_in, 
-                        cfg.gnn.linear_output_layer
+                        cfg.gnn.linear_output_layer,
+                        num_layers=1,
+                        has_act=False,
+                        has_bias=True,
+                        cfg=cfg
                     ))
             if cfg.model.edge_decoding == 'dot':
                 self.decode_module = lambda v1, v2: torch.sum(v1 * v2, dim=-1)
