@@ -52,24 +52,34 @@ class GNNTransductiveEdgeHead(torch.nn.Module):
                                  f"'{cfg.model.edge_decoding}'")
 
     def _apply_index(self, batch):
-        index = f'{batch.split}_edge_index'
-        label = f'{batch.split}_edge_label'
-
-        # Sample edges for training
-        #if batch.split == 'train':
-        #    edge_mask = torch.randperm(batch.train_edge_index.shape[1])[:10000]
-        #    edge_index = batch.train_edge_index[:, edge_mask]
-        #    edge_label = batch.train_edge_label[edge_mask]
-
-        #    return batch.x[edge_index], edge_label
-
-        return batch.x[batch[index]], batch[label]
+        if cfg.dataset.name == 'PyG-OLGA_triplet':
+            triplets = batch[f'{batch.split}_triplet']
+            if cfg.dataset.triplets_per_edge == 'two':
+                edges = torch.cat((triplets[[0, 1]][:, :int(triplets.size(1)/2)], triplets[[0, 2]]), 1)
+                labels = torch.cat((torch.ones(int(triplets.size(1)/2), dtype=int), 
+                                    torch.zeros(triplets.size(1), dtype=int)))
+            else:
+                edges = torch.cat((triplets[[0, 1]], triplets[[0, 2]]), 1)
+                labels = torch.cat((torch.ones(triplets.size(1), dtype=int), 
+                                    torch.zeros(triplets.size(1), dtype=int)))
+            return batch.x[triplets], batch.x[edges], labels
+        else:
+            index = f'{batch.split}_edge_index'
+            label = f'{batch.split}_edge_label'
+            return batch.x[batch[index]], batch[label]
 
     def forward(self, batch):
         if cfg.model.edge_decoding != 'concat':
             batch = self.layer_post_mp(batch)
-        pred, label = self._apply_index(batch)
-        nodes_first = pred[0]
-        nodes_second = pred[1]
-        pred = self.decode_module(nodes_first, nodes_second)
-        return pred, label
+        if cfg.dataset.name == 'PyG-OLGA_triplet':
+            x_triplets, pred, label = self._apply_index(batch)
+            nodes_first = pred[0]
+            nodes_second = pred[1]
+            pred = self.decode_module(nodes_first, nodes_second)
+            return x_triplets, pred, label
+        else:
+            pred, label = self._apply_index(batch)
+            nodes_first = pred[0]
+            nodes_second = pred[1]
+            pred = self.decode_module(nodes_first, nodes_second)
+            return pred, label
