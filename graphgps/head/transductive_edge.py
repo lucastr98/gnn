@@ -4,6 +4,7 @@ import torch.nn as nn
 from torch_geometric.graphgym.config import cfg
 from torch_geometric.graphgym.models.layer import new_layer_config, MLP, Linear
 from torch_geometric.graphgym.register import register_head
+import torch.nn.functional as F
 
 
 @register_head('transductive_edge')
@@ -85,10 +86,11 @@ class GNNTransductiveEdgeHead(torch.nn.Module):
                 batch = self.output_layer(batch)
         if cfg.dataset.name == 'PyG-OLGA_triplet':
             x_triplets, pred, label = self._apply_index(batch)
+            x_triplets_normalized = F.normalize(x_triplets, p=2, dim=-1)
             nodes_first = pred[0]
             nodes_second = pred[1]
             pred = self.decode_module(nodes_first, nodes_second)
-            return x_triplets, pred, label
+            return x_triplets_normalized, pred, label
         else:
             pred, label = self._apply_index(batch)
             nodes_first = pred[0]
