@@ -153,9 +153,12 @@ class OLGATriplet(InMemoryDataset):
 
         # features (trivial at the moment)
         # Comment: x_test is called x such that graphgym derives correct cfg.share.dim_in
-        data['x_train'] = torch.nn.functional.one_hot((torch.zeros(num_train_nodes, dtype=int)), num_classes=3).float()
-        data['x_val'] = torch.nn.functional.one_hot((torch.zeros(num_train_nodes + num_val_nodes, dtype=int)), num_classes=3).float()
-        data['x'] = torch.nn.functional.one_hot((torch.zeros(num_train_nodes + num_val_nodes + num_test_nodes, dtype=int)), num_classes=3).float()
+        # data['x_train'] = torch.nn.functional.one_hot((torch.zeros(num_train_nodes, dtype=int)), num_classes=3).float()
+        # data['x_val'] = torch.nn.functional.one_hot((torch.zeros(num_train_nodes + num_val_nodes, dtype=int)), num_classes=3).float()
+        # data['x'] = torch.nn.functional.one_hot((torch.zeros(num_train_nodes + num_val_nodes + num_test_nodes, dtype=int)), num_classes=3).float()
+        data['x_train'] = torch.rand(num_train_nodes, 2613).float()
+        data['x_val'] = torch.cat((data['x_train'], torch.rand(num_val_nodes, 2613).float()))
+        data['x'] = torch.cat((data['x_val'], torch.rand(num_test_nodes, 2613).float()))
 
         # graph for message passing
         data['edge_index_train'] = mapped_train_edges_torch
