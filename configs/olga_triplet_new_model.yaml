@@ -34,6 +34,7 @@ gnn:
   layers_pre_mp: 0
   layers_mp: 2
   layers_post_mp: 2
+  linear_output_layer: 100 # set to -1 to disable
   dim_inner: 256
   layer_type: sageconv
   act: elu

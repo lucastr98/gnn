@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch_geometric.graphgym.config import cfg
-from torch_geometric.graphgym.models.layer import new_layer_config, MLP
+from torch_geometric.graphgym.models.layer import new_layer_config, MLP, Linear
 from torch_geometric.graphgym.register import register_head
 
 
@@ -43,6 +43,12 @@ class GNNTransductiveEdgeHead(torch.nn.Module):
                     has_bias=True,
                     cfg=cfg,
                 ))
+            if cfg.gnn.linear_output_layer != -1:
+                self.output_layer = Linear(
+                    new_layer_config(
+                        dim_in, 
+                        cfg.gnn.linear_output_layer
+                    ))
             if cfg.model.edge_decoding == 'dot':
                 self.decode_module = lambda v1, v2: torch.sum(v1 * v2, dim=-1)
             elif cfg.model.edge_decoding == 'cosine_similarity':
@@ -71,6 +77,8 @@ class GNNTransductiveEdgeHead(torch.nn.Module):
     def forward(self, batch):
         if cfg.model.edge_decoding != 'concat':
             batch = self.layer_post_mp(batch)
+            if cfg.gnn.linear_output_layer != -1:
+                batch = self.output_layer(batch)
         if cfg.dataset.name == 'PyG-OLGA_triplet':
             x_triplets, pred, label = self._apply_index(batch)
             nodes_first = pred[0]

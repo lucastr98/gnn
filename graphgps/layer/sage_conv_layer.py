@@ -12,7 +12,7 @@ class SAGEConvLayer(nn.Module):
         self.dropout = dropout
         self.residual = residual
 
-        self.model = SAGEConv(dim_in, dim_out, normalize=True, project=True)
+        self.model = SAGEConv(dim_in, dim_out, project=True)
 
     def forward(self, batch):
         x_in = batch.x
@@ -21,6 +21,7 @@ class SAGEConvLayer(nn.Module):
 
         batch.x = F.elu(batch.x)
         batch.x = F.dropout(batch.x, p=self.dropout, training=self.training)
+        batch.x = F.normalize(batch.x, p=2., dim=-1)
 
         if self.residual:
             batch.x = x_in + batch.x  # residual connection
