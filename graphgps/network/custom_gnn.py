@@ -24,7 +24,6 @@ class CustomGNN(torch.nn.Module):
         self.encoder = FeatureEncoder(dim_in)
         dim_in = self.encoder.dim_in
 
-        logging.info(f"HERE: dim_in={dim_in}, dim_out={dim_out}, dim_inner={cfg.gnn.dim_inner}")
         if cfg.gnn.layers_pre_mp > 0:
             self.pre_mp = GNNPreMP(
                 dim_in, cfg.gnn.dim_inner, cfg.gnn.layers_pre_mp)

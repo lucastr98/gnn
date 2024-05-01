@@ -39,7 +39,7 @@ class GNNTransductiveEdgeHead(torch.nn.Module):
                     dim_in,
                     dim_in,
                     cfg.gnn.layers_post_mp,
-                    has_act=False,
+                    has_act=True,
                     has_bias=True,
                     cfg=cfg,
                 ))

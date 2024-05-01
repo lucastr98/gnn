@@ -31,12 +31,12 @@ model:
   graph_pooling: add
 gnn:
   head: transductive_edge
-  layers_pre_mp: 1
+  layers_pre_mp: 0
   layers_mp: 2
-  layers_post_mp: 1
-  dim_inner: 16
+  layers_post_mp: 2
+  dim_inner: 256
   layer_type: sageconv
-  act: relu
+  act: elu
   residual: False
   dropout: 0.0
 optim:
