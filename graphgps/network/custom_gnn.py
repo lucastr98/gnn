@@ -7,8 +7,10 @@ from torch_geometric.graphgym.register import register_network
 
 from graphgps.layer.gatedgcn_layer import GatedGCNLayer
 from graphgps.layer.gine_conv_layer import GINEConvLayer
+from graphgps.layer.sage_conv_layer import SAGEConvLayer
 from graphgps.layer.transformerconv_layer import TransformerConvLayer
 
+import logging
 
 @register_network('custom_gnn')
 class CustomGNN(torch.nn.Module):
@@ -22,6 +24,7 @@ class CustomGNN(torch.nn.Module):
         self.encoder = FeatureEncoder(dim_in)
         dim_in = self.encoder.dim_in
 
+        logging.info(f"HERE: dim_in={dim_in}, dim_out={dim_out}, dim_inner={cfg.gnn.dim_inner}")
         if cfg.gnn.layers_pre_mp > 0:
             self.pre_mp = GNNPreMP(
                 dim_in, cfg.gnn.dim_inner, cfg.gnn.layers_pre_mp)
@@ -49,6 +52,8 @@ class CustomGNN(torch.nn.Module):
             return GINEConvLayer
         elif model_type == 'transformerconv':
             return TransformerConvLayer
+        elif model_type == 'sageconv':
+            return SAGEConvLayer
         else:
             raise ValueError("Model {} unavailable".format(model_type))
 
