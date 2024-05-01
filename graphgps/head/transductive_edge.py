@@ -54,9 +54,14 @@ class GNNTransductiveEdgeHead(torch.nn.Module):
     def _apply_index(self, batch):
         if cfg.dataset.name == 'PyG-OLGA_triplet':
             triplets = batch[f'{batch.split}_triplet']
-            edges = torch.cat((triplets[[0, 1]], triplets[[0, 2]]), 1)
-            labels = torch.cat((torch.ones(triplets.size(1), dtype=int), 
-                                torch.zeros(triplets.size(1), dtype=int)))
+            if cfg.dataset.triplets_per_edge == 'two':
+                edges = torch.cat((triplets[[0, 1]][:, :int(triplets.size(1)/2)], triplets[[0, 2]]), 1)
+                labels = torch.cat((torch.ones(int(triplets.size(1)/2), dtype=int), 
+                                    torch.zeros(triplets.size(1), dtype=int)))
+            else:
+                edges = torch.cat((triplets[[0, 1]], triplets[[0, 2]]), 1)
+                labels = torch.cat((torch.ones(triplets.size(1), dtype=int), 
+                                    torch.zeros(triplets.size(1), dtype=int)))
             return batch.x[triplets], batch.x[edges], labels
         else:
             index = f'{batch.split}_edge_index'

@@ -27,4 +27,4 @@ def extended_optim_cfg(cfg):
     cfg.optim.clip_grad_norm = False
     cfg.optim.clip_grad_norm_value = 1.0
 
-    cfg.optim.triplet_loss_margin = 1
+    cfg.optim.triplet_loss_margin = 1.0
