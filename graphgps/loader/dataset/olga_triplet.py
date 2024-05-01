@@ -46,9 +46,9 @@ class OLGATriplet(InMemoryDataset):
         transform: Optional[Callable] = None,
         pre_transform: Optional[Callable] = None,
     ) -> None:
+        self.triplets_per_edge = triplets_per_edge
         super().__init__(root, transform, pre_transform)
         self.data = torch.load(self.processed_paths[0])
-        self.triplets_per_edge = triplets_per_edge
         if embedding is None:
             pass
         else:
@@ -199,7 +199,7 @@ class OLGATriplet(InMemoryDataset):
             map_2_zero_test_check_edges[0, swap_mask], map_2_zero_test_check_edges[1, swap_mask] = \
                 map_2_zero_test_check_edges_torch[1, swap_mask], map_2_zero_test_check_edges_torch[0, swap_mask]
         a, p, n = structured_negative_sampling(map_2_zero_test_check_edges, 
-                                               num_nodes=(num_train_nodes+num_val_nodes), 
+                                               num_nodes=num_test_nodes, 
                                                contains_neg_self_loops=False)
         data['test_triplets'] = torch.stack((a, p, n)) + (num_train_nodes + num_val_nodes)
 

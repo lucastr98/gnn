@@ -23,8 +23,25 @@ def train_epoch(logger, loader, model, optimizer, scheduler, batch_accumulation,
         if cfg.dataset.name == "PyG-OLGA_triplet":
             x_triplets, pred, true = model(batch)
             _true = true.detach().to('cpu', non_blocking=True)
-            _pred = torch.nn.functional.log_softmax(pred, dim=-1).detach().to('cpu', non_blocking=True)
-            loss = triplet_loss(x_triplets[0], x_triplets[1], x_triplets[2])
+
+            pred = pred.squeeze(-1) if pred.ndim > 1 else pred
+            if pred.ndim > 1 and true.ndim == 1:
+                pred = torch.nn.functional.log_softmax(pred, dim=-1)
+            else:
+                pred = torch.sigmoid(pred)
+            _pred = pred.detach().to('cpu', non_blocking=True)
+
+            anchor = x_triplets[0]
+            positive = x_triplets[1]
+            negative = x_triplets[2]
+            anchor = torch.nn.functional.normalize(anchor, p=2, dim=1)
+            positive = torch.nn.functional.normalize(positive, p=2, dim=1)
+            negative = torch.nn.functional.normalize(negative, p=2, dim=1)
+            anchor.requires_grad_(True)
+            positive.requires_grad_(True)
+            negative.requires_grad_(True)
+
+            loss = triplet_loss(anchor, positive, negative)
         else:
             pred, true = model(batch) # of type LightningModule
             if cfg.dataset.name == 'ogbg-code2':
@@ -64,7 +81,14 @@ def eval_epoch(logger, loader, model, split='val', triplet_loss=None):
             x_triplets, pred, true = model(batch)
             extra_stats = {}
             _true = true.detach().to('cpu', non_blocking=True)
-            _pred = torch.nn.functional.log_softmax(pred, dim=-1).detach().to('cpu', non_blocking=True)
+
+            pred = pred.squeeze(-1) if pred.ndim > 1 else pred
+            if pred.ndim > 1 and true.ndim == 1:
+                pred = torch.nn.functional.log_softmax(pred, dim=-1)
+            else:
+                pred = torch.sigmoid(pred)
+            _pred = pred.detach().to('cpu', non_blocking=True)
+
             loss = triplet_loss(x_triplets[0], x_triplets[1], x_triplets[2])
         else:
             if cfg.gnn.head == 'inductive_edge':

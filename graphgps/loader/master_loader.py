@@ -124,8 +124,8 @@ def load_dataset_master(format, name, dataset_dir):
         elif pyg_dataset_id == 'OLGA':
             dataset = OLGA(dataset_dir, embedding=cfg.dataset.embedding)
 
-        elif pyg_dataset_id == 'OLGA-triplet':
-            dataset = OLGA(dataset_dir, triplets_per_edge=cfg.dataset.triplets_per_edge, embedding=cfg.dataset.embedding)
+        elif pyg_dataset_id == 'OLGA_triplet':
+            dataset = OLGATriplet(dataset_dir, triplets_per_edge=cfg.dataset.triplets_per_edge, embedding=cfg.dataset.embedding)
 
         elif pyg_dataset_id == 'TUDataset':
             dataset = preformat_TUDataset(dataset_dir, name)
