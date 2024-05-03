@@ -29,6 +29,7 @@ model:
   type: custom_gnn
   edge_decoding: cosine_similarity
   graph_pooling: add
+  thresh: 0.65
 gnn:
   head: transductive_edge
   layers_pre_mp: 0
@@ -42,11 +43,11 @@ gnn:
   dropout: 0.0
 optim:
   optimizer: adamW
-  weight_decay: 0.01
-  base_lr: 0.001
+  weight_decay: 0.05
+  base_lr: 0.0001
   max_epoch: 300
   scheduler: reduce_on_plateau
   reduce_factor: 0.5
   schedule_patience: 20
   min_lr: 1e-5
-  triplet_loss_margin: 0.5
+  triplet_loss_margin: 1.0
