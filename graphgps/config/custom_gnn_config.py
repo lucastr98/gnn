@@ -9,3 +9,6 @@ def custom_gnn_cfg(cfg):
 
     # Use residual connections between the GNN layers.
     cfg.gnn.residual = False
+
+    # no additional linear output layer if -1, otherwise output_dim of layer
+    cfg.gnn.linear_output_layer = -1

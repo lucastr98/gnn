@@ -2,8 +2,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch_geometric.graphgym.config import cfg
-from torch_geometric.graphgym.models.layer import new_layer_config, MLP
+from torch_geometric.graphgym.models.layer import new_layer_config, MLP, Linear
 from torch_geometric.graphgym.register import register_head
+import torch.nn.functional as F
 
 
 @register_head('transductive_edge')
@@ -39,10 +40,20 @@ class GNNTransductiveEdgeHead(torch.nn.Module):
                     dim_in,
                     dim_in,
                     cfg.gnn.layers_post_mp,
-                    has_act=False,
+                    has_act=True,
                     has_bias=True,
                     cfg=cfg,
                 ))
+            if cfg.gnn.linear_output_layer != -1:
+                self.output_layer = Linear(
+                    new_layer_config(
+                        dim_in, 
+                        cfg.gnn.linear_output_layer,
+                        num_layers=1,
+                        has_act=False,
+                        has_bias=True,
+                        cfg=cfg
+                    ))
             if cfg.model.edge_decoding == 'dot':
                 self.decode_module = lambda v1, v2: torch.sum(v1 * v2, dim=-1)
             elif cfg.model.edge_decoding == 'cosine_similarity':
@@ -71,12 +82,15 @@ class GNNTransductiveEdgeHead(torch.nn.Module):
     def forward(self, batch):
         if cfg.model.edge_decoding != 'concat':
             batch = self.layer_post_mp(batch)
+            if cfg.gnn.linear_output_layer != -1:
+                batch = self.output_layer(batch)
         if cfg.dataset.name == 'PyG-OLGA_triplet':
             x_triplets, pred, label = self._apply_index(batch)
+            x_triplets_normalized = F.normalize(x_triplets, p=2, dim=-1)
             nodes_first = pred[0]
             nodes_second = pred[1]
             pred = self.decode_module(nodes_first, nodes_second)
-            return x_triplets, pred, label
+            return x_triplets_normalized, pred, label
         else:
             pred, label = self._apply_index(batch)
             nodes_first = pred[0]
