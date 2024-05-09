@@ -89,12 +89,12 @@ class OLGATriplet(InMemoryDataset):
         # get train/val/test node split
         train_m = np.load(os.path.join(self.raw_dir, 'olga_data/train_mask.npz')) 
         train_indices = train_m['indices']
-        num_train_nodes = len(train_indices)
+        num_train_nodes = len(train_indices) # 14139
         val_m = np.load(os.path.join(self.raw_dir, 'olga_data/val_mask.npz')) 
         val_indices = val_m['indices']
-        num_val_nodes = len(val_indices)
+        num_val_nodes = len(val_indices) # 1767
         test_m = np.load(os.path.join(self.raw_dir, 'olga_data/test_mask.npz')) 
-        test_indices = test_m['indices']
+        test_indices = test_m['indices'] # 1767
         num_test_nodes = len(test_indices)
         train_edge_indices = []
         val_graph_edge_indices = []

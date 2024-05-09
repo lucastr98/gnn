@@ -8,10 +8,29 @@ from torch_geometric.graphgym.config import cfg
 from torch_geometric.graphgym.loss import compute_loss
 from torch_geometric.graphgym.register import register_train
 from torch_geometric.graphgym.utils.epoch import is_eval_epoch, is_ckpt_epoch
+from torch_geometric.metrics import LinkPredNDCG
 
 from graphgps.loss.subtoken_prediction_loss import subtoken_cross_entropy
 from graphgps.utils import cfg_to_dict, flatten_dict, make_wandb_name
 
+import torch.nn.functional as F
+
+def process_model_output(x, triplets, pred, true):
+    _true = true.detach().to('cpu', non_blocking=True)
+    pred = pred.squeeze(-1) if pred.ndim > 1 else pred
+    if pred.ndim > 1 and true.ndim == 1:
+        pred = torch.nn.functional.log_softmax(pred, dim=-1)
+    else:
+        pred = torch.sigmoid(pred)
+    _pred = pred.detach().to('cpu', non_blocking=True)
+
+    x_triplets = x[triplets]
+    x_triplets_normalized = F.normalize(x_triplets, p=2, dim=-1)
+    anchor = x_triplets_normalized[0]
+    positive = x_triplets_normalized[1]
+    negative = x_triplets_normalized[2]
+
+    return _pred, _true, anchor, positive, negative
 
 def train_epoch(logger, loader, model, optimizer, scheduler, batch_accumulation, triplet_loss=None):
     model.train()
@@ -20,20 +39,24 @@ def train_epoch(logger, loader, model, optimizer, scheduler, batch_accumulation,
     for iter, batch in enumerate(loader):
         batch.split = 'train'
         batch.to(torch.device(cfg.accelerator))
+        # if cfg.dataset.name == "PyG-OLGA_triplet":
+        #     x_triplets, pred, true = model(batch)
+        #     _true = true.detach().to('cpu', non_blocking=True)
+
+        #     pred = pred.squeeze(-1) if pred.ndim > 1 else pred
+        #     if pred.ndim > 1 and true.ndim == 1:
+        #         pred = torch.nn.functional.log_softmax(pred, dim=-1)
+        #     else:
+        #         pred = torch.sigmoid(pred)
+        #     _pred = pred.detach().to('cpu', non_blocking=True)
+
+        #     anchor = x_triplets[0]
+        #     positive = x_triplets[1]
+        #     negative = x_triplets[2]
+        #     loss = triplet_loss(anchor, positive, negative)
         if cfg.dataset.name == "PyG-OLGA_triplet":
-            x_triplets, pred, true = model(batch)
-            _true = true.detach().to('cpu', non_blocking=True)
-
-            pred = pred.squeeze(-1) if pred.ndim > 1 else pred
-            if pred.ndim > 1 and true.ndim == 1:
-                pred = torch.nn.functional.log_softmax(pred, dim=-1)
-            else:
-                pred = torch.sigmoid(pred)
-            _pred = pred.detach().to('cpu', non_blocking=True)
-
-            anchor = x_triplets[0]
-            positive = x_triplets[1]
-            negative = x_triplets[2]
+            x, triplets, pred, true = model(batch)
+            _pred, _true, anchor, positive, negative = process_model_output(x, triplets, pred, true)
             loss = triplet_loss(anchor, positive, negative)
         else:
             pred, true = model(batch) # of type LightningModule
@@ -64,28 +87,57 @@ def train_epoch(logger, loader, model, optimizer, scheduler, batch_accumulation,
 
 
 @torch.no_grad()
-def eval_epoch(logger, loader, model, split='val', triplet_loss=None):
+def eval_epoch(logger, loader, model, split='val', triplet_loss=None, last_epoch=False, split_num_nodes=[None]*3):
     model.eval()
     time_start = time.time()
     for batch in loader:
         batch.split = split
         batch.to(torch.device(cfg.accelerator))
         if cfg.dataset.name == "PyG-OLGA_triplet":
-            x_triplets, pred, true = model(batch)
+            x, triplets, pred, true = model(batch)
             extra_stats = {}
-            _true = true.detach().to('cpu', non_blocking=True)
-
-            pred = pred.squeeze(-1) if pred.ndim > 1 else pred
-            if pred.ndim > 1 and true.ndim == 1:
-                pred = torch.nn.functional.log_softmax(pred, dim=-1)
-            else:
-                pred = torch.sigmoid(pred)
-            _pred = pred.detach().to('cpu', non_blocking=True)
-
-            anchor = x_triplets[0]
-            positive = x_triplets[1]
-            negative = x_triplets[2]
+            _pred, _true, anchor, positive, negative = process_model_output(x, triplets, pred, true)
             loss = triplet_loss(anchor, positive, negative)
+            if last_epoch:
+                # calculate NDCG @ 200
+                k = 200
+                num_nodes_prev = split_num_nodes[0] if (split == 'val') else (split_num_nodes[0] + split_num_nodes[1])
+                num_nodes = split_num_nodes[1] if (split == 'val') else split_num_nodes[2]
+                x_eval = x[-num_nodes:]
+                if cfg.model.edge_decoding == "cosine_similarity":
+                    x_cosine_similarity = F.cosine_similarity(x_eval[None,:,:], x_eval[:,None,:], dim=-1)
+                    top_similarities_with_self, top_indices_with_self = torch.topk(x_cosine_similarity, k + 1)
+                elif cfg.model.edge_decoding == "dot":
+                    x_distance = F.pairwise_distance(x_eval[None,:,:], x_eval[:,None,:])
+                    top_similarities_with_self, top_indices_with_self = torch.topk(x_distance, k + 1, largest=False)
+                else:
+                    logging.info(f"edge decoding {cfg.model.edge_decoding} not supported for calculating NDCG")
+                top_indices = top_indices_with_self[:, 1:]
+                top_similarities = top_similarities_with_self[:, 1:]
+                top_predictions = torch.sigmoid(top_similarities)
+                pred_index_mat = (top_predictions > cfg.model.thresh).long()
+
+                # create set of all edges in graph
+                if cfg.dataset.triplets_per_edge == 'two':
+                    all_edges = triplets[[0, 1]]
+                else:
+                    all_edges = torch.cat((triplets[[0, 1]], triplets[[1, 0]]), 1)
+                all_edges_mapped = all_edges - num_nodes_prev
+                edge_set = set(map(tuple, all_edges_mapped.T.tolist())) 
+
+                # create edges from the top 200
+                row_indices = torch.arange(num_nodes).view(-1, 1).expand_as(top_indices)
+                top_edges = torch.stack((row_indices, top_indices), dim=-1).reshape(-1, 2)
+                
+                # create mask
+                mask = torch.tensor([tuple(edge.tolist()) in edge_set for edge in top_edges]).view(num_nodes, k)
+                y_count = torch.sum(mask, dim=-1)
+
+                # compute NDCG
+                ndcg = LinkPredNDCG(k)
+                ndcg_values = ndcg(pred_index_mat, y_count)
+                ndcg_avg = torch.mean(ndcg_values)
+                logging.info(f"NDCG@200: {ndcg_avg}")
         else:
             if cfg.gnn.head == 'inductive_edge':
                 pred, true, extra_stats = model(batch)
@@ -113,7 +165,7 @@ def eval_epoch(logger, loader, model, split='val', triplet_loss=None):
 
 
 @register_train('custom')
-def custom_train(loggers, loaders, model, optimizer, scheduler, loss=None):
+def custom_train(loggers, loaders, model, optimizer, scheduler, loss=None, split_num_nodes=[None]*3):
     """
     Customized training pipeline.
 
@@ -165,7 +217,9 @@ def custom_train(loggers, loaders, model, optimizer, scheduler, loss=None):
             for i in range(1, num_splits):
                 if cfg.dataset.name == 'PyG-OLGA_triplet':
                     eval_epoch(loggers[i], loaders[i], model,
-                              split=split_names[i - 1], triplet_loss=loss)
+                              split=split_names[i - 1], triplet_loss=loss, 
+                              last_epoch=(cur_epoch == (cfg.optim.max_epoch - 1)),
+                              num_nodes=split_num_nodes)
                 else:
                     eval_epoch(loggers[i], loaders[i], model,
                               split=split_names[i - 1])

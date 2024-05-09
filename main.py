@@ -37,6 +37,8 @@ from graphgps.logger import create_logger
 torch.backends.cuda.matmul.allow_tf32 = True  # Default False in PyTorch 1.12+
 torch.backends.cudnn.allow_tf32 = True  # Default True
 
+# stores number of nodes per split (0: train, 1: val, 2: test)
+split_num_nodes = [None] * 3
 
 def new_optimizer_config(cfg):
     return OptimizerConfig(optimizer=cfg.optim.optimizer,
@@ -221,10 +223,13 @@ class OLGATripletSampler(torch.utils.data.DataLoader):
         self.split = split
         if split == 'train':
             self.num_nodes = len(data.x_train)
+            split_num_nodes[0] = self.num_nodes
         elif split == 'val':
             self.num_nodes = len(data.x_val)
+            split_num_nodes[1] = self.num_nodes
         elif split == 'test':
             self.num_nodes = len(data.x)
+            split_num_nodes[2] = self.num_nodes
         else:
             logging.warning(f"OLGATripletSampler: split={split} not known")
 
@@ -456,7 +461,7 @@ if __name__ == '__main__':
         else:
             if cfg.dataset.name == 'PyG-OLGA_triplet':
                 train_dict[cfg.train.mode](loggers, loaders, model, optimizer,
-                                          scheduler, loss)
+                                          scheduler, loss, split_num_nodes)
             else:
                 train_dict[cfg.train.mode](loggers, loaders, model, optimizer,
                                           scheduler)
