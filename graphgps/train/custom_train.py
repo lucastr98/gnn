@@ -218,7 +218,8 @@ def custom_train(loggers, loaders, model, optimizer, scheduler, loss=None, split
                 if cfg.dataset.name == 'PyG-OLGA_triplet':
                     eval_epoch(loggers[i], loaders[i], model,
                               split=split_names[i - 1], triplet_loss=loss, 
-                              last_epoch=(cur_epoch == (cfg.optim.max_epoch - 1)),
+                              # last_epoch=(cur_epoch == (cfg.optim.max_epoch - 1)),
+                              last_epoch=True,
                               num_nodes=split_num_nodes)
                 else:
                     eval_epoch(loggers[i], loaders[i], model,
