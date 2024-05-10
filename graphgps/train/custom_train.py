@@ -8,7 +8,6 @@ from torch_geometric.graphgym.config import cfg
 from torch_geometric.graphgym.loss import compute_loss
 from torch_geometric.graphgym.register import register_train
 from torch_geometric.graphgym.utils.epoch import is_eval_epoch, is_ckpt_epoch
-from torch_geometric.metrics import LinkPredNDCG
 
 from graphgps.loss.subtoken_prediction_loss import subtoken_cross_entropy
 from graphgps.utils import cfg_to_dict, flatten_dict, make_wandb_name
@@ -134,8 +133,14 @@ def eval_epoch(logger, loader, model, split='val', triplet_loss=None, last_epoch
                 y_count = torch.sum(mask, dim=-1)
 
                 # compute NDCG
-                ndcg = LinkPredNDCG(k)
-                ndcg_values = ndcg(pred_index_mat, y_count)
+                # ndcg = LinkPredNDCG(k)
+                # ndcg_values = ndcg(pred_index_mat, y_count)
+                multiplier = 1.0 / torch.arange(2, k + 2, dtype=torch.get_default_dtype()).log2()
+                pre_idcg = torch.cumsum(multiplier, dim=0)
+                dcg = (pred_index_mat * multiplier.view(1, -1)).sum(dim=-1)
+                idcg = pre_idcg[y_count.clamp(max=k)]
+                ndcg_values = dcg / idcg
+
                 ndcg_avg = torch.mean(ndcg_values)
                 logging.info(f"NDCG@200: {ndcg_avg}")
         else:
