@@ -38,21 +38,6 @@ def train_epoch(logger, loader, model, optimizer, scheduler, batch_accumulation,
     for iter, batch in enumerate(loader):
         batch.split = 'train'
         batch.to(torch.device(cfg.accelerator))
-        # if cfg.dataset.name == "PyG-OLGA_triplet":
-        #     x_triplets, pred, true = model(batch)
-        #     _true = true.detach().to('cpu', non_blocking=True)
-
-        #     pred = pred.squeeze(-1) if pred.ndim > 1 else pred
-        #     if pred.ndim > 1 and true.ndim == 1:
-        #         pred = torch.nn.functional.log_softmax(pred, dim=-1)
-        #     else:
-        #         pred = torch.sigmoid(pred)
-        #     _pred = pred.detach().to('cpu', non_blocking=True)
-
-        #     anchor = x_triplets[0]
-        #     positive = x_triplets[1]
-        #     negative = x_triplets[2]
-        #     loss = triplet_loss(anchor, positive, negative)
         if cfg.dataset.name == "PyG-OLGA_triplet":
             x, triplets, pred, true = model(batch)
             _pred, _true, anchor, positive, negative = process_model_output(x, triplets, pred, true)
@@ -114,7 +99,7 @@ def eval_epoch(logger, loader, model, split='val', triplet_loss=None, calculate_
                 top_indices = top_indices_with_self[:, 1:]
                 top_similarities = top_similarities_with_self[:, 1:]
                 top_predictions = torch.sigmoid(top_similarities)
-                pred_index_mat = (top_predictions > cfg.model.thresh).long()
+                prediction_mat = (top_predictions > cfg.model.thresh)
 
                 # create set of all edges in graph
                 if cfg.dataset.triplets_per_edge == 'two':
@@ -129,36 +114,20 @@ def eval_epoch(logger, loader, model, split='val', triplet_loss=None, calculate_
                 row_indices = torch.arange(num_nodes).to(device).view(-1, 1).expand_as(top_indices)
                 top_edges = torch.stack((row_indices, top_indices), dim=-1).reshape(-1, 2)
                 
-                # create mask
+                # create mask indicating if top edges are actual edges or not
                 mask = torch.tensor([tuple(edge.tolist()) in edge_set for edge in top_edges], device=device).view(num_nodes, k)
-                y_count = torch.sum(mask, dim=-1)
 
                 # compute NDCG
-                # ndcg = LinkPredNDCG(k)
-                # ndcg_values = ndcg(pred_index_mat, y_count)
-                pred_index_mat = (top_predictions > cfg.model.thresh)
-                new_pred_index_mat = (mask & pred_index_mat)
-                new_y_count = torch.zeros(num_nodes, dtype=torch.long)
+                pred_index_mat = (mask & prediction_mat)
+                y_count = torch.zeros(num_nodes, dtype=torch.long)
                 for edge in all_edges_mapped.T:
-                    new_y_count[edge[0]] += 1
-                new_y_count.to(device)
+                    y_count[edge[0]] += 1
+                y_count.to(device)
                 multiplier = 1.0 / torch.arange(2, k + 2, dtype=torch.get_default_dtype()).log2().to(device)
                 pre_idcg = torch.cumsum(multiplier, dim=0).to(device)
-                dcg = (new_pred_index_mat * multiplier.view(1, -1)).sum(dim=-1)
-                idcg = pre_idcg[new_y_count.clamp(max=k)]
+                dcg = (pred_index_mat * multiplier.view(1, -1)).sum(dim=-1)
+                idcg = pre_idcg[y_count.clamp(max=k)]
                 ndcg_values = dcg / idcg
-
-                #multiplier = 1.0 / torch.arange(2, k + 2, dtype=torch.get_default_dtype()).log2().to(device)
-                ##pre_idcg = torch.cumsum(multiplier, dim=0).to(device)
-                #dcg = (pred_index_mat * multiplier.view(1, -1)).sum(dim=-1)
-                #idcg = (mask * multiplier.view(1, -1)).sum(dim=-1)
-                ##idcg = pre_idcg[y_count.clamp(max=k)]
-                #logging.info(pred_index_mat)
-                #logging.info(dcg)
-                #logging.info(mask)
-                #logging.info(idcg)
-                #ndcg_values = dcg / idcg
-
                 ndcg_avg = torch.mean(ndcg_values)
                 logging.info(f"NDCG@200 (with zeroes): {ndcg_avg}")
                 nz_sum = 0.0
@@ -248,8 +217,7 @@ def custom_train(loggers, loaders, model, optimizer, scheduler, loss=None, split
                 if cfg.dataset.name == 'PyG-OLGA_triplet':
                     eval_epoch(loggers[i], loaders[i], model,
                               split=split_names[i - 1], triplet_loss=loss, 
-                              calculate_ndcg=((cur_epoch + 1) % 50 == 0),
-                              #calculate_ndcg=True,
+                              calculate_ndcg=((cur_epoch + 1) % 25 == 0),
                               split_num_nodes=split_num_nodes)
                 else:
                     eval_epoch(loggers[i], loaders[i], model,
