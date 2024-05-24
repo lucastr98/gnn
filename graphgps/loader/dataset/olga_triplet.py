@@ -37,8 +37,7 @@ class OLGATriplet(InMemoryDataset):
             (default: :obj:`False`)
     """
     # url = 'https://polybox.ethz.ch/index.php/s/ZXCdjkCJns9qlMY/download' olga_data_old
-    # url = 'https://polybox.ethz.ch/index.php/s/0kvKlP24U4FX3N3/download' olga_data_new
-    url = 'https://polybox.ethz.ch/index.php/s/cTUpmWeggtk9isd/download' # olga_data
+    url = 'https://polybox.ethz.ch/index.php/s/UaNopMsBT822Stf/download'
     
     def __init__(
         self,
