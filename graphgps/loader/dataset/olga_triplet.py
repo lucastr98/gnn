@@ -162,7 +162,7 @@ class OLGATriplet(InMemoryDataset):
         which_features = 'rand' # rand, acousticbrainz, clap, acousticbrainz_clap
         acousticbrainz_features = np.load(os.path.join(self.raw_dir, 'olga_data/acousticbrainz.npy'))
         clap_features = np.load(os.path.join(self.raw_dir, 'olga_data/clap.npy'))
-        rand_features = torch.rand(num_nodes, 2613).float()
+        rand_features = np.random.rand(num_nodes, 2613).astype(np.float32)
         if which_features == 'rand':
             features = rand_features
         elif which_features == 'acousticbrainz':
@@ -173,9 +173,9 @@ class OLGATriplet(InMemoryDataset):
             features = np.vstack((acousticbrainz_features, clap_features))
         else:
             logging.info(f'which_features value is incorrect: {which_features}')
-        data['x_train'] = torch.tensor(features[:num_train_nodes])
-        data['x_val'] = torch.tensor(features[:(num_train_nodes + num_val_nodes)])
-        data['x'] = torch.tensor(features)
+        data['x_train'] = torch.tensor(features[:num_train_nodes]).float()
+        data['x_val'] = torch.tensor(features[:(num_train_nodes + num_val_nodes)]).float()
+        data['x'] = torch.tensor(features).float()
 
         # graph for message passing
         data['edge_index_train'] = mapped_train_edges_torch
