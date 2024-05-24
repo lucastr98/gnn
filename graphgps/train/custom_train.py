@@ -217,7 +217,7 @@ def custom_train(loggers, loaders, model, optimizer, scheduler, loss=None, split
                 if cfg.dataset.name == 'PyG-OLGA_triplet':
                     eval_epoch(loggers[i], loaders[i], model,
                               split=split_names[i - 1], triplet_loss=loss, 
-                              calculate_ndcg=((cur_epoch + 1) % 25 == 0),
+                              calculate_ndcg=((cur_epoch + 1) % 10 == 0),
                               split_num_nodes=split_num_nodes)
                 else:
                     eval_epoch(loggers[i], loaders[i], model,
