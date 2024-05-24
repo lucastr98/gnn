@@ -36,7 +36,8 @@ class OLGATriplet(InMemoryDataset):
         force_reload (bool, optional): Whether to re-process the dataset.
             (default: :obj:`False`)
     """
-    url = 'https://polybox.ethz.ch/index.php/s/ZXCdjkCJns9qlMY/download'
+    # url = 'https://polybox.ethz.ch/index.php/s/ZXCdjkCJns9qlMY/download'
+    url = 'https://polybox.ethz.ch/index.php/s/bECbi9yz6vE38DM/download'
     
     def __init__(
         self,
