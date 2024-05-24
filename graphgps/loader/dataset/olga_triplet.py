@@ -159,7 +159,7 @@ class OLGATriplet(InMemoryDataset):
 
         # features (trivial at the moment)
         # Comment: x_test is called x such that graphgym derives correct cfg.share.dim_in
-        which_features = 'rand' # rand, acousticbrainz, clap, acousticbrainz_clap
+        which_features = 'acousticbrainz_clap' # rand, acousticbrainz, clap, acousticbrainz_clap
         acousticbrainz_features = np.load(os.path.join(self.raw_dir, 'olga_data/acousticbrainz.npy'))
         clap_features = np.load(os.path.join(self.raw_dir, 'olga_data/clap.npy'))
         rand_features = np.random.rand(num_nodes, 2613).astype(np.float32)
@@ -170,7 +170,7 @@ class OLGATriplet(InMemoryDataset):
         elif which_features == 'clap':
             features = clap_features
         elif which_features == 'acousticbrainz_clap':
-            features = np.vstack((acousticbrainz_features, clap_features))
+            features = np.hstack((acousticbrainz_features, clap_features))
         else:
             logging.info(f'which_features value is incorrect: {which_features}')
         data['x_train'] = torch.tensor(features[:num_train_nodes]).float()
