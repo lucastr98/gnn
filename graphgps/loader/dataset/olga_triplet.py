@@ -62,7 +62,12 @@ class OLGATriplet(InMemoryDataset):
             'artist_connections.npz',
             'train_mask.npz',
             'val_mask.npz',
-            'test_mask.npz'
+            'test_mask.npz',
+            'clap.npy',
+            'val_triplets_one',
+            'val_triplets_two',
+            'test_triplets_one',
+            'test_triplets_two'
         ]
 
     @property
@@ -153,7 +158,7 @@ class OLGATriplet(InMemoryDataset):
 
         # features (trivial at the moment)
         # Comment: x_test is called x such that graphgym derives correct cfg.share.dim_in
-        which_features = 'acousticbrainz_clap' # rand, acousticbrainz, clap, acousticbrainz_clap
+        which_features = 'rand' # rand, acousticbrainz, clap, acousticbrainz_clap
         acousticbrainz_features = np.load(os.path.join(self.raw_dir, 'olga_data/acousticbrainz.npy'))
         clap_features = np.load(os.path.join(self.raw_dir, 'olga_data/clap.npy'))
         rand_features = torch.rand(num_nodes, 2613).float()
@@ -206,9 +211,9 @@ class OLGATriplet(InMemoryDataset):
             data['val_triplets'] = torch.stack((a, p, n)) + num_train_nodes
         else:
             if self.triplets_per_edge == "two":
-                data['val_triplets'] = torch.load('data/olga/val_triplets_two.pt')
+                data['val_triplets'] = torch.load(os.path.join(self.raw_dir, 'olga_data/val_triplets_two.pt'))
             else:
-                data['val_triplets'] = torch.load('data/olga/val_triplets_one.pt')
+                data['val_triplets'] = torch.load(os.path.join(self.raw_dir, 'olga_data/val_triplets_one.pt'))
                 
             
 
@@ -229,9 +234,9 @@ class OLGATriplet(InMemoryDataset):
             data['test_triplets'] = torch.stack((a, p, n)) + (num_train_nodes + num_val_nodes)
         else:
             if self.triplets_per_edge == "two":
-                data['test_triplets'] = torch.load('data/olga/test_triplets_two.pt')
+                data['test_triplets'] = torch.load(os.path.join(self.raw_dir, 'olga_data/test_triplets_two.pt'))
             else:
-                data['test_triplets'] = torch.load('data/olga/test_triplets_one.pt')
+                data['test_triplets'] = torch.load(os.path.join(self.raw_dir, 'olga_data/test_triplets_one.pt'))
 
 
         # save data
