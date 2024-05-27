@@ -36,7 +36,8 @@ class OLGATriplet(InMemoryDataset):
         force_reload (bool, optional): Whether to re-process the dataset.
             (default: :obj:`False`)
     """
-    url = 'https://polybox.ethz.ch/index.php/s/ZXCdjkCJns9qlMY/download'
+    # url = 'https://polybox.ethz.ch/index.php/s/ZXCdjkCJns9qlMY/download' olga_data_old
+    url = 'https://polybox.ethz.ch/index.php/s/UaNopMsBT822Stf/download'
     
     def __init__(
         self,
@@ -62,7 +63,12 @@ class OLGATriplet(InMemoryDataset):
             'artist_connections.npz',
             'train_mask.npz',
             'val_mask.npz',
-            'test_mask.npz'
+            'test_mask.npz',
+            'clap.npy',
+            'val_triplets_one',
+            'val_triplets_two',
+            'test_triplets_one',
+            'test_triplets_two'
         ]
 
     @property
@@ -153,13 +159,23 @@ class OLGATriplet(InMemoryDataset):
 
         # features (trivial at the moment)
         # Comment: x_test is called x such that graphgym derives correct cfg.share.dim_in
-        # data['x_train'] = torch.rand(num_train_nodes, 2613).float()
-        # data['x_val'] = torch.cat((data['x_train'], torch.rand(num_val_nodes, 2613).float()))
-        # data['x'] = torch.cat((data['x_val'], torch.rand(num_test_nodes, 2613).float()))
-        features = np.load(os.path.join(self.raw_dir, 'olga_data/acousticbrainz.npy'))
-        data['x_train'] = torch.tensor(features[:num_train_nodes])
-        data['x_val'] = torch.tensor(features[:(num_train_nodes + num_val_nodes)])
-        data['x'] = torch.tensor(features)
+        which_features = 'acousticbrainz_clap' # rand, acousticbrainz, clap, acousticbrainz_clap
+        acousticbrainz_features = np.load(os.path.join(self.raw_dir, 'olga_data/acousticbrainz.npy'))
+        clap_features = np.load(os.path.join(self.raw_dir, 'olga_data/clap.npy'))
+        rand_features = np.random.rand(num_nodes, 2613).astype(np.float32)
+        if which_features == 'rand':
+            features = rand_features
+        elif which_features == 'acousticbrainz':
+            features = acousticbrainz_features
+        elif which_features == 'clap':
+            features = clap_features
+        elif which_features == 'acousticbrainz_clap':
+            features = np.hstack((acousticbrainz_features, clap_features))
+        else:
+            logging.info(f'which_features value is incorrect: {which_features}')
+        data['x_train'] = torch.tensor(features[:num_train_nodes]).float()
+        data['x_val'] = torch.tensor(features[:(num_train_nodes + num_val_nodes)]).float()
+        data['x'] = torch.tensor(features).float()
 
         # graph for message passing
         data['edge_index_train'] = mapped_train_edges_torch
@@ -177,35 +193,52 @@ class OLGATriplet(InMemoryDataset):
         # train
         data['train_edge_index'] = mapped_train_edges_torch
         
+        resample_eval_triplets = False
+
         # val
-        map_2_zero_val_check_edges_torch = mapped_val_check_edges_torch - num_train_nodes
-        if self.triplets_per_edge == "two":
-            map_2_zero_val_check_edges = torch.cat((map_2_zero_val_check_edges_torch,
-                                                    map_2_zero_val_check_edges_torch[[1, 0]]), 1)
+        if resample_eval_triplets:
+            map_2_zero_val_check_edges_torch = mapped_val_check_edges_torch - num_train_nodes
+            if self.triplets_per_edge == "two":
+                map_2_zero_val_check_edges = torch.cat((map_2_zero_val_check_edges_torch,
+                                                        map_2_zero_val_check_edges_torch[[1, 0]]), 1)
+            else:
+                swap_mask = torch.rand(map_2_zero_val_check_edges_torch.size(1)) > 0.5
+                map_2_zero_val_check_edges = map_2_zero_val_check_edges_torch.clone()
+                map_2_zero_val_check_edges[0, swap_mask], map_2_zero_val_check_edges[1, swap_mask] = \
+                    map_2_zero_val_check_edges_torch[1, swap_mask], map_2_zero_val_check_edges_torch[0, swap_mask]
+            a, p, n = structured_negative_sampling(map_2_zero_val_check_edges, 
+                                                  num_nodes=num_val_nodes, 
+                                                  contains_neg_self_loops=False)
+            data['val_triplets'] = torch.stack((a, p, n)) + num_train_nodes
         else:
-            swap_mask = torch.rand(map_2_zero_val_check_edges_torch.size(1)) > 0.5
-            map_2_zero_val_check_edges = map_2_zero_val_check_edges_torch.clone()
-            map_2_zero_val_check_edges[0, swap_mask], map_2_zero_val_check_edges[1, swap_mask] = \
-                map_2_zero_val_check_edges_torch[1, swap_mask], map_2_zero_val_check_edges_torch[0, swap_mask]
-        a, p, n = structured_negative_sampling(map_2_zero_val_check_edges, 
-                                               num_nodes=num_val_nodes, 
-                                               contains_neg_self_loops=False)
-        data['val_triplets'] = torch.stack((a, p, n)) + num_train_nodes
+            if self.triplets_per_edge == "two":
+                data['val_triplets'] = torch.load(os.path.join(self.raw_dir, 'olga_data/val_triplets_two.pt'))
+            else:
+                data['val_triplets'] = torch.load(os.path.join(self.raw_dir, 'olga_data/val_triplets_one.pt'))
+                
+            
 
         # test
-        map_2_zero_test_check_edges_torch = mapped_test_check_edges_torch - (num_train_nodes + num_val_nodes)
-        if self.triplets_per_edge == "two":
-            map_2_zero_test_check_edges = torch.cat((map_2_zero_test_check_edges_torch,
-                                                     map_2_zero_test_check_edges_torch[[1, 0]]), 1)
+        if resample_eval_triplets:
+            map_2_zero_test_check_edges_torch = mapped_test_check_edges_torch - (num_train_nodes + num_val_nodes)
+            if self.triplets_per_edge == "two":
+                map_2_zero_test_check_edges = torch.cat((map_2_zero_test_check_edges_torch,
+                                                        map_2_zero_test_check_edges_torch[[1, 0]]), 1)
+            else:
+                swap_mask = torch.rand(map_2_zero_test_check_edges_torch.size(1)) > 0.5
+                map_2_zero_test_check_edges = map_2_zero_test_check_edges_torch.clone()
+                map_2_zero_test_check_edges[0, swap_mask], map_2_zero_test_check_edges[1, swap_mask] = \
+                    map_2_zero_test_check_edges_torch[1, swap_mask], map_2_zero_test_check_edges_torch[0, swap_mask]
+            a, p, n = structured_negative_sampling(map_2_zero_test_check_edges, 
+                                                  num_nodes=num_test_nodes, 
+                                                  contains_neg_self_loops=False)
+            data['test_triplets'] = torch.stack((a, p, n)) + (num_train_nodes + num_val_nodes)
         else:
-            swap_mask = torch.rand(map_2_zero_test_check_edges_torch.size(1)) > 0.5
-            map_2_zero_test_check_edges = map_2_zero_test_check_edges_torch.clone()
-            map_2_zero_test_check_edges[0, swap_mask], map_2_zero_test_check_edges[1, swap_mask] = \
-                map_2_zero_test_check_edges_torch[1, swap_mask], map_2_zero_test_check_edges_torch[0, swap_mask]
-        a, p, n = structured_negative_sampling(map_2_zero_test_check_edges, 
-                                               num_nodes=num_test_nodes, 
-                                               contains_neg_self_loops=False)
-        data['test_triplets'] = torch.stack((a, p, n)) + (num_train_nodes + num_val_nodes)
+            if self.triplets_per_edge == "two":
+                data['test_triplets'] = torch.load(os.path.join(self.raw_dir, 'olga_data/test_triplets_two.pt'))
+            else:
+                data['test_triplets'] = torch.load(os.path.join(self.raw_dir, 'olga_data/test_triplets_one.pt'))
+
 
         # save data
         torch.save(data, self.processed_paths[0])
