@@ -444,7 +444,7 @@ if __name__ == '__main__':
         optimizer = create_optimizer(model.parameters(),
                                      new_optimizer_config(cfg))
         scheduler = create_scheduler(optimizer, new_scheduler_config(cfg))
-        if cfg.dataset.name == 'PyG-OLGA_triplet':
+        if cfg.model.loss_fun == 'triplet':
             loss = nn.TripletMarginLoss(margin=cfg.optim.triplet_loss_margin)
         # Print model info
         logging.info(model)
@@ -459,7 +459,7 @@ if __name__ == '__main__':
             datamodule = GraphGymDataModule()
             train(model, datamodule, logger=True)
         else:
-            if cfg.dataset.name == 'PyG-OLGA_triplet':
+            if cfg.model.loss_fun == 'triplet':
                 train_dict[cfg.train.mode](loggers, loaders, model, optimizer,
                                           scheduler, loss, split_num_nodes)
             else:

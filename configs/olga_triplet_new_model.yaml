@@ -27,6 +27,7 @@ train:
   ckpt_period: 100
 model:
   type: custom_gnn
+  loss_fun: triplet
   edge_decoding: cosine_similarity
   graph_pooling: add
   thresh: 0.65

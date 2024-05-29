@@ -63,7 +63,7 @@ class GNNTransductiveEdgeHead(torch.nn.Module):
                                  f"'{cfg.model.edge_decoding}'")
 
     def _apply_index(self, batch):
-        if cfg.dataset.name == 'PyG-OLGA_triplet':
+        if cfg.model.loss_fun == 'triplet':
             triplets = batch[f'{batch.split}_triplet']
             if cfg.dataset.triplets_per_edge == 'two':
                 edges = torch.cat((triplets[[0, 1]][:, :int(triplets.size(1)/2)], triplets[[0, 2]]), 1)
@@ -74,7 +74,6 @@ class GNNTransductiveEdgeHead(torch.nn.Module):
                 labels = torch.cat((torch.ones(triplets.size(1), dtype=int), 
                                     torch.zeros(triplets.size(1), dtype=int)))
             return triplets, batch.x[edges], labels
-            # return batch.x[triplets], batch.x[edges], labels
         else:
             index = f'{batch.split}_edge_index'
             label = f'{batch.split}_edge_label'
@@ -85,14 +84,7 @@ class GNNTransductiveEdgeHead(torch.nn.Module):
             batch = self.layer_post_mp(batch)
             if cfg.gnn.linear_output_layer != -1:
                 batch = self.output_layer(batch)
-        # if cfg.dataset.name == 'PyG-OLGA_triplet':
-        #     x_triplets, pred, label = self._apply_index(batch)
-        #     x_triplets_normalized = F.normalize(x_triplets, p=2, dim=-1)
-        #     nodes_first = pred[0]
-        #     nodes_second = pred[1]
-        #     pred = self.decode_module(nodes_first, nodes_second)
-        #     return x_triplets_normalized, pred, label
-        if cfg.dataset.name == 'PyG-OLGA_triplet':
+        if cfg.model.loss_fun == 'triplet':
             triplets, pred, label = self._apply_index(batch)
             nodes_first = pred[0]
             nodes_second = pred[1]

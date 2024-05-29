@@ -38,7 +38,7 @@ def train_epoch(logger, loader, model, optimizer, scheduler, batch_accumulation,
     for iter, batch in enumerate(loader):
         batch.split = 'train'
         batch.to(torch.device(cfg.accelerator))
-        if cfg.dataset.name == "PyG-OLGA_triplet":
+        if cfg.model.loss_fun == 'triplet':
             x, triplets, pred, true = model(batch)
             _pred, _true, anchor, positive, negative = process_model_output(x, triplets, pred, true)
             loss = triplet_loss(anchor, positive, negative)
@@ -77,7 +77,7 @@ def eval_epoch(logger, loader, model, split='val', triplet_loss=None, calculate_
     for batch in loader:
         batch.split = split
         batch.to(torch.device(cfg.accelerator))
-        if cfg.dataset.name == "PyG-OLGA_triplet":
+        if cfg.model.loss_fun == 'triplet':
             x, triplets, pred, true = model(batch)
             extra_stats = {}
             _pred, _true, anchor, positive, negative = process_model_output(x, triplets, pred, true)
