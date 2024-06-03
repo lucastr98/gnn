@@ -199,7 +199,7 @@ class CustomLogger(Logger):
         }
 
     def update_stats(self, true, pred, loss, lr, time_used, params,
-                     dataset_name=None, **kwargs):
+                     dataset_name=None, ndcg=None, **kwargs):
         if dataset_name == 'ogbg-code2':
             assert true['y_arr'].shape[1] == len(pred)  # max_seq_len (5)
             assert true['y_arr'].shape[0] == pred[0].shape[0]  # batch size
@@ -230,6 +230,7 @@ class CustomLogger(Logger):
         self._params = params
         self._time_used += time_used
         self._time_total += time_used
+        self._ndcg = ndcg
         for key, val in kwargs.items():
             if key not in self._custom_stats:
                 self._custom_stats[key] = val * batch_size
@@ -274,6 +275,8 @@ class CustomLogger(Logger):
                 **task_stats,
                 **custom_stats
             }
+        if self._ndcg != None:
+            stats['ndcg'] = self._ndcg
 
         # print
         logging.info('{}: {}'.format(self.name, stats))

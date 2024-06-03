@@ -139,7 +139,7 @@ def eval_epoch(logger, loader, model, split='val', triplet_loss=None, calculate_
                 num_nodes_prev = split_num_nodes[0] if (split == 'val') else split_num_nodes[1]
                 num_nodes = (split_num_nodes[1] - split_num_nodes[0]) if (split == 'val') else (split_num_nodes[2] - split_num_nodes[1])
                 _, ndcg = calculate_ndcg_at_k(200, num_nodes_prev, num_nodes, x, triplets)
-                print(F"NDCG@200: {ndcg}")
+                print(f"NDCG@200: {round(ndcg, 3)}")
         else:
             if cfg.gnn.head == 'inductive_edge':
                 pred, true, extra_stats = model(batch)
@@ -162,6 +162,7 @@ def eval_epoch(logger, loader, model, split='val', triplet_loss=None, calculate_
                             lr=0, time_used=time.time() - time_start,
                             params=cfg.params,
                             dataset_name=cfg.dataset.name,
+                            ndcg=(ndcg if calculate_ndcg else None)
                             **extra_stats)
         time_start = time.time()
 
@@ -206,6 +207,7 @@ def custom_train(loggers, loaders, model, optimizer, scheduler, loss=None, split
     full_epoch_times = []
     perf = [[] for _ in range(num_splits)]
     for cur_epoch in range(start_epoch, cfg.optim.max_epoch):
+        calculate_ndcg = ((cur_epoch + 1) % 10 == 0)
         start_time = time.perf_counter()
         if cfg.dataset.name == 'PyG-OLGA_triplet':
             train_epoch(loggers[0], loaders[0], model, optimizer, scheduler,
@@ -220,7 +222,7 @@ def custom_train(loggers, loaders, model, optimizer, scheduler, loss=None, split
                 if cfg.dataset.name == 'PyG-OLGA_triplet':
                     eval_epoch(loggers[i], loaders[i], model,
                               split=split_names[i - 1], triplet_loss=loss, 
-                              calculate_ndcg=((cur_epoch + 1) % 10 == 0),
+                              calculate_ndcg=calculate_ndcg,
                               split_num_nodes=split_num_nodes)
                 else:
                     eval_epoch(loggers[i], loaders[i], model,
