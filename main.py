@@ -426,6 +426,10 @@ if __name__ == '__main__':
         loaders = custom_create_loader(cfg)
         loggers = create_logger()
 
+        # dirty hack to get triplet loss function to work
+        # triplet loss cannot be implemented like other losses in GraphGym
+        # because their compute_loss function expects a (pred, true) tuple
+        # but the triplet loss needs triplets 
         if cfg.model.loss_fun == 'triplet':
             cfg.model.loss_fun = 'cross_entropy'
             model = create_model()
