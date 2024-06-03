@@ -15,22 +15,34 @@ from graphgps.utils import cfg_to_dict, flatten_dict, make_wandb_name
 import torch.nn.functional as F
 
 def calculate_ndcg_at_k(k, smallest_idx, num_nodes, x, triplets):
+    # calculate pairwise similarities and get closest k points
     x_eval = x[-num_nodes:]
     x_eval_normalized = F.normalize(x_eval, p=2, dim=-1)
     if cfg.model.edge_decoding == "cosine_similarity":
+        # cosine similarity is large if vectors are close
         x_cosine_similarity = F.cosine_similarity(x_eval_normalized[None,:,:], x_eval_normalized[:,None,:], dim=-1)
         top_similarities_with_self, top_indices_with_self = torch.topk(x_cosine_similarity, k + 1)
+    elif cfg.model.edge_decoding == "euclidean":
+        # euclidean distance is small if vectors are close
+        x_euclidean = F.pairwise_distance(x_eval_normalized[None,:,:], x_eval_normalized[:,None,:])
+        top_similarities_with_self, top_indices_with_self = torch.topk(x_euclidean, k + 1, largest=False)
     elif cfg.model.edge_decoding == "dot":
-        x_distance = F.pairwise_distance(x_eval_normalized[None,:,:], x_eval_normalized[:,None,:])
-        top_similarities_with_self, top_indices_with_self = torch.topk(x_distance, k + 1, largest=False)
+        # dot product is large large if vectors are close
+        x_dot = torch.sum(x_eval_normalized[None, :, :] * x_eval_normalized[:, None, :], dim=-1)
+        top_similarities_with_self, top_indices_with_self = torch.topk(x_dot, k + 1)
     else:
         logging.info(f"edge decoding {cfg.model.edge_decoding} not supported for calculating NDCG")
+
+    # best similarity is always similarity to self --> remove
     top_indices = top_indices_with_self[:, 1:]
     top_similarities = top_similarities_with_self[:, 1:]
+
+    # create predictions of top k closest nodes
     top_predictions = torch.sigmoid(top_similarities)
     prediction_mat = (top_predictions > cfg.model.thresh)
 
-    # create set of all edges in graph
+    # create set of all positive edges in graph
+    # set contains both configurations: (v1, v2) and (v2, v1)
     if cfg.dataset.triplets_per_edge == 'two':
         all_edges = triplets[[0, 1]]
     else:
@@ -38,31 +50,55 @@ def calculate_ndcg_at_k(k, smallest_idx, num_nodes, x, triplets):
     all_edges_mapped = all_edges - smallest_idx
     edge_set = set(map(tuple, all_edges_mapped.T.tolist())) 
 
-    # create edges from the top k
+    # create edges from the top k (can be either way around)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     row_indices = torch.arange(num_nodes).to(device).view(-1, 1).expand_as(top_indices)
     top_edges = torch.stack((row_indices, top_indices), dim=-1).reshape(-1, 2)
     
-    # create mask indicating if top edges are actual edges or not
+    # create mask indicating if top edges are actual positive edges or not
+    # mask: 
+    #   - has size (num_nodes, k) --> for each node there's 200 fields for the 200 closest nodes
+    #   - is 1 if there is a positive edge, is 0 if there is no positive edge --> no edge
     mask = torch.tensor([tuple(edge.tolist()) in edge_set for edge in top_edges], device=device).view(num_nodes, k)
 
     # compute NDCG
-    pred_index_mat = (mask & prediction_mat)
+    # discounting factor
+    discounting = 1.0 / torch.arange(2, k + 2, dtype=torch.get_default_dtype()).log2().to(device)
+
+    # denominator: 
+    #   - count the number of actual neighbors per node --> y_count
+    #   - clamp the count s.t. it's at most 200 --> y_count_clamped
+    #   - the denominator is sum_k{d(k)} with k <= y_count_clamped
+    #     therefore we calculate cumsum of discounting and index with
+    #     y_count_clamped --> idcg
     y_count = torch.zeros(num_nodes, dtype=torch.long)
     for edge in all_edges_mapped.T:
         y_count[edge[0]] += 1
     y_count.to(device)
-    multiplier = 1.0 / torch.arange(2, k + 2, dtype=torch.get_default_dtype()).log2().to(device)
-    pre_idcg = torch.cumsum(multiplier, dim=0).to(device)
-    dcg = (pred_index_mat * multiplier.view(1, -1)).sum(dim=-1)
-    idcg = pre_idcg[y_count.clamp(max=k)]
+    y_count_clamped = y_count.clamp(max=k)
+    discounting_summed = torch.cumsum(discounting, dim=0).to(device)
+    idcg = discounting_summed[y_count_clamped]
+
+    # nominator:
+    #  - take AND of mask and prediction matrices to get a matrix that
+    #    is 1 if the edge was predicted and is actually an edge and that
+    #    is 0 if the edge was not predicted OR is actually not and edge
+    #    --> pred_index_mat
+    #  - make a column vector out of discounting --> discounting.view(1, -1)
+    #  - multiply and sum the matrix and the column vector to get the nominator
+    pred_index_mat = (mask & prediction_mat)
+    dcg = (pred_index_mat * discounting.view(1, -1)).sum(dim=-1)
+    
+    # calculate ndcg
     ndcg_values = dcg / idcg
     ndcg = torch.mean(ndcg_values)
+
+    # exclude nodes that have no positive edge in the graph
     nz_sum = 0.0
     nz_count = 0
-    for val in ndcg_values:
-        if val != 0.0:
-            nz_sum += val
+    for i in range(num_nodes):
+        if y_count[i] > 0:
+            nz_sum +=  ndcg_values[i]
             nz_count += 1
     ndcg_without_zeroes = nz_sum / nz_count
     return ndcg.item(), ndcg_without_zeroes.item()

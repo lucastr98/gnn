@@ -28,9 +28,9 @@ train:
 model:
   type: custom_gnn
   loss_fun: triplet
-  edge_decoding: cosine_similarity
+  edge_decoding: euclidean
   graph_pooling: add
-  thresh: 0.65
+  thresh: 0.55 # 0.65
 gnn:
   head: transductive_edge
   layers_pre_mp: 0

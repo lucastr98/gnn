@@ -431,6 +431,8 @@ if __name__ == '__main__':
         # because their compute_loss function expects a (pred, true) tuple
         # but the triplet loss needs triplets 
         if cfg.model.loss_fun == 'triplet':
+            if cfg.model.edge_decoding != 'euclidean':
+                logging.warning("[WARN] triplet loss only works with euclidean distance.")
             cfg.model.loss_fun = 'cross_entropy'
             model = create_model()
             cfg.model.loss_fun = 'triplet'
