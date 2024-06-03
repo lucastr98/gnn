@@ -65,7 +65,7 @@ def calculate_ndcg_at_k(k, smallest_idx, num_nodes, x, triplets):
             nz_sum += val
             nz_count += 1
     ndcg_without_zeroes = nz_sum / nz_count
-    return ndcg, ndcg_without_zeroes
+    return ndcg.item(), ndcg_without_zeroes.item()
 
 def process_model_output(x, triplets, pred, true):
     _true = true.detach().to('cpu', non_blocking=True)
@@ -162,7 +162,7 @@ def eval_epoch(logger, loader, model, split='val', triplet_loss=None, calculate_
                             lr=0, time_used=time.time() - time_start,
                             params=cfg.params,
                             dataset_name=cfg.dataset.name,
-                            ndcg=(ndcg if calculate_ndcg else None)
+                            ndcg=(ndcg if calculate_ndcg else None),
                             **extra_stats)
         time_start = time.time()
 
