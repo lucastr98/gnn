@@ -39,7 +39,7 @@ def calculate_ndcg_at_k(k, smallest_idx, num_nodes, x, triplets):
 
     # create predictions of top k closest nodes
     top_predictions = torch.sigmoid(top_similarities)
-    prediction_mat = (top_predictions > cfg.model.thresh)
+    prediction_mat = (top_predictions < cfg.model.thresh)
 
     # create set of all positive edges in graph
     # set contains both configurations: (v1, v2) and (v2, v1)

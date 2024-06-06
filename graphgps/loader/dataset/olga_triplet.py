@@ -159,7 +159,7 @@ class OLGATriplet(InMemoryDataset):
 
         # features (trivial at the moment)
         # Comment: x_test is called x such that graphgym derives correct cfg.share.dim_in
-        which_features = 'acousticbrainz_clap' # rand, acousticbrainz, clap, acousticbrainz_clap
+        which_features = 'acousticbrainz' # rand, acousticbrainz, clap, acousticbrainz_clap
         acousticbrainz_features = np.load(os.path.join(self.raw_dir, 'olga_data/acousticbrainz.npy'))
         clap_features = np.load(os.path.join(self.raw_dir, 'olga_data/clap.npy'))
         rand_features = np.random.rand(num_nodes, 2613).astype(np.float32)

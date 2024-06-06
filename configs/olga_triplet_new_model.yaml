@@ -30,7 +30,7 @@ model:
   loss_fun: triplet
   edge_decoding: euclidean
   graph_pooling: add
-  thresh: 0.55 # 0.65
+  thresh: 0.61 # 0.65
 gnn:
   head: transductive_edge
   layers_pre_mp: 0
@@ -38,7 +38,7 @@ gnn:
   layers_post_mp: 2
   linear_output_layer: 100 # set to -1 to disable
   dim_inner: 256
-  layer_type: sageconv
+  layer_type: gatedgcnconv
   act: elu
   residual: False
   dropout: 0.0
