@@ -432,8 +432,6 @@ if __name__ == '__main__':
         # because their compute_loss function expects a (pred, true) tuple
         # but the triplet loss needs triplets 
         if cfg.model.loss_fun == 'triplet':
-            if cfg.model.edge_decoding != 'euclidean' and cfg.model.edge_decoding != 'cosine_similarity':
-                logging.warning("[WARN] triplet loss only works with euclidean or cosine_similarity")
             cfg.model.loss_fun = 'cross_entropy'
             model = create_model()
             cfg.model.loss_fun = 'triplet'
@@ -453,6 +451,9 @@ if __name__ == '__main__':
                 loss = nn.TripletMarginWithDistanceLoss(distance_function=nn.PairwiseDistance(), margin=cfg.optim.triplet_loss_margin)
             elif cfg.model.edge_decoding == 'cosine_similarity':
                 loss = nn.TripletMarginWithDistanceLoss(distance_function=lambda x, y: 1.0 - F.cosine_similarity(x, y), margin=cfg.optim.triplet_loss_margin)
+            else:
+                logging.warning("[WARN] triplet loss only works with euclidean or cosine_similarity")
+                exit(0)
             
         # Print model info
         logging.info(model)
