@@ -246,19 +246,9 @@ class OLGATripletSampler(torch.utils.data.DataLoader):
 
         if self.split == 'train':
             if cfg.dataset.triplets_per_edge == "two":
-                # edge_mask = torch.randperm(self.data.train_edge_index.size(1))[:int(cfg.dataset.num_samples/2)]
-                # train_edge_sample = self.data.train_edge_index[:, edge_mask]
-                # train_edges = torch.cat((train_edge_sample,
-                #                          train_edge_sample[[1, 0]]), 1)
                 train_edges = torch.cat((self.data.train_edge_index,
                                          self.data.train_edge_index[[1, 0]]), 1)
             else:
-                # edge_mask = torch.randperm(self.data.train_edge_index.size(1))[:cfg.dataset.num_samples]
-                # train_edge_sample= self.data.train_edge_index[:, edge_mask]
-                # swap_mask = torch.rand(train_edge_sample.size(1)) > 0.5
-                # train_edges = train_edge_sample.clone()
-                # train_edges[0, swap_mask], train_edges[1, swap_mask] = \
-                #     train_edge_sample[1, swap_mask], train_edge_sample[0, swap_mask]
                 swap_mask = torch.rand(self.data.train_edge_index.size(1)) > 0.5
                 train_edges = self.data.train_edge_index.clone()
                 train_edges[0, swap_mask], train_edges[1, swap_mask] = \
@@ -435,7 +425,20 @@ if __name__ == '__main__':
         # Set machine learning pipeline
         loaders = custom_create_loader(cfg)
         loggers = create_logger()
-        model = create_model()
+
+        # dirty hack to get triplet loss function to work
+        # triplet loss cannot be implemented like other losses in GraphGym
+        # because their compute_loss function expects a (pred, true) tuple
+        # but the triplet loss needs triplets 
+        if cfg.model.loss_fun == 'triplet':
+            if cfg.model.edge_decoding != 'euclidean':
+                logging.warning("[WARN] triplet loss only works with euclidean distance.")
+            cfg.model.loss_fun = 'cross_entropy'
+            model = create_model()
+            cfg.model.loss_fun = 'triplet'
+        else:
+            model = create_model()
+
         if cfg.pretrained.dir:
             model = init_model_from_pretrained(
                 model, cfg.pretrained.dir, cfg.pretrained.freeze_main,
@@ -444,7 +447,7 @@ if __name__ == '__main__':
         optimizer = create_optimizer(model.parameters(),
                                      new_optimizer_config(cfg))
         scheduler = create_scheduler(optimizer, new_scheduler_config(cfg))
-        if cfg.dataset.name == 'PyG-OLGA_triplet':
+        if cfg.model.loss_fun == 'triplet':
             loss = nn.TripletMarginLoss(margin=cfg.optim.triplet_loss_margin)
         # Print model info
         logging.info(model)
@@ -459,7 +462,7 @@ if __name__ == '__main__':
             datamodule = GraphGymDataModule()
             train(model, datamodule, logger=True)
         else:
-            if cfg.dataset.name == 'PyG-OLGA_triplet':
+            if cfg.model.loss_fun == 'triplet':
                 train_dict[cfg.train.mode](loggers, loaders, model, optimizer,
                                           scheduler, loss, split_num_nodes)
             else:

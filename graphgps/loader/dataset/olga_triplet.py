@@ -2,6 +2,7 @@ import os
 import os.path as osp
 from itertools import product
 from typing import Callable, List, Optional
+from torch_geometric.graphgym.config import cfg
 
 import numpy as np
 import scipy.sparse
@@ -159,20 +160,20 @@ class OLGATriplet(InMemoryDataset):
 
         # features (trivial at the moment)
         # Comment: x_test is called x such that graphgym derives correct cfg.share.dim_in
-        which_features = 'acousticbrainz_clap' # rand, acousticbrainz, clap, acousticbrainz_clap
         acousticbrainz_features = np.load(os.path.join(self.raw_dir, 'olga_data/acousticbrainz.npy'))
         clap_features = np.load(os.path.join(self.raw_dir, 'olga_data/clap.npy'))
         rand_features = np.random.rand(num_nodes, 2613).astype(np.float32)
-        if which_features == 'rand':
+        if cfg.dataset.features == 'random':
             features = rand_features
-        elif which_features == 'acousticbrainz':
+        elif cfg.dataset.features == 'acousticbrainz':
             features = acousticbrainz_features
-        elif which_features == 'clap':
+        elif cfg.dataset.features == 'clap':
             features = clap_features
-        elif which_features == 'acousticbrainz_clap':
+        elif cfg.dataset.features == 'acousticbrainz_clap':
             features = np.hstack((acousticbrainz_features, clap_features))
         else:
-            logging.info(f'which_features value is incorrect: {which_features}')
+            logging.info(f'cfg.dataset.features is incorrect: {cfg.dataset.features}')
+            exit(0)
         data['x_train'] = torch.tensor(features[:num_train_nodes]).float()
         data['x_val'] = torch.tensor(features[:(num_train_nodes + num_val_nodes)]).float()
         data['x'] = torch.tensor(features).float()

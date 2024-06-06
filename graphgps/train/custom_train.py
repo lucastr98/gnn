@@ -14,6 +14,98 @@ from graphgps.utils import cfg_to_dict, flatten_dict, make_wandb_name
 
 import torch.nn.functional as F
 
+def calculate_ndcg_at_k(smallest_idx, num_nodes, x, triplets):
+    k = cfg.ndcg_metric.k
+
+    # calculate pairwise similarities and get closest k points
+    x_eval = x[-num_nodes:]
+    if cfg.model.edge_decoding == "cosine_similarity":
+        # cosine similarity is large if vectors are close
+        x_cosine_similarity = F.cosine_similarity(x_eval[None,:,:], x_eval[:,None,:], dim=-1)
+        top_similarities_with_self, top_indices_with_self = torch.topk(x_cosine_similarity, k + 1)
+    elif cfg.model.edge_decoding == "euclidean":
+        # euclidean distance is small if vectors are close
+        x_euclidean = F.pairwise_distance(x_eval[None,:,:], x_eval[:,None,:])
+        x_euclidean = 1 / (1 + x_euclidean)
+        top_similarities_with_self, top_indices_with_self = torch.topk(x_euclidean, k + 1)
+    elif cfg.model.edge_decoding == "dot":
+        # dot product is large large if vectors are close
+        x_dot = torch.sum(x_eval[None, :, :] * x_eval[:, None, :], dim=-1)
+        top_similarities_with_self, top_indices_with_self = torch.topk(x_dot, k + 1)
+    else:
+        logging.info(f"edge decoding {cfg.model.edge_decoding} not supported for calculating NDCG")
+
+    # best similarity is always similarity to self --> remove
+    top_indices = top_indices_with_self[:, 1:]
+    top_similarities = top_similarities_with_self[:, 1:]
+
+    # create predictions of top k closest nodes
+    top_predictions = torch.sigmoid(top_similarities)
+    # prediction_mat = (top_predictions < cfg.model.thresh)
+    prediction_mat = (top_predictions > cfg.model.thresh)
+
+    # create set of all positive edges in graph
+    # set contains both configurations: (v1, v2) and (v2, v1)
+    if cfg.dataset.triplets_per_edge == 'two':
+        all_edges = triplets[[0, 1]]
+    else:
+        all_edges = torch.cat((triplets[[0, 1]], triplets[[1, 0]]), 1)
+    all_edges_mapped = all_edges - smallest_idx
+    edge_set = set(map(tuple, all_edges_mapped.T.tolist())) 
+
+    # create edges from the top k (can be either way around)
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    row_indices = torch.arange(num_nodes).to(device).view(-1, 1).expand_as(top_indices)
+    top_edges = torch.stack((row_indices, top_indices), dim=-1).reshape(-1, 2)
+    
+    # create mask indicating if top edges are actual positive edges or not
+    # mask: 
+    #   - has size (num_nodes, k) --> for each node there's 200 fields for the 200 closest nodes
+    #   - is 1 if there is a positive edge, is 0 if there is no positive edge --> no edge
+    mask = torch.tensor([tuple(edge.tolist()) in edge_set for edge in top_edges], device=device).view(num_nodes, k)
+
+    # compute NDCG
+    # discounting factor
+    discounting = 1.0 / torch.arange(2, k + 2, dtype=torch.get_default_dtype()).log2().to(device)
+
+    # denominator: 
+    #   - count the number of actual neighbors per node --> y_count
+    #   - clamp the count s.t. it's at most 200 --> y_count_clamped
+    #   - the denominator is sum_k{d(k)} with k <= y_count_clamped
+    #     therefore we calculate cumsum of discounting and index with
+    #     y_count_clamped --> idcg
+    y_count = torch.zeros(num_nodes, dtype=torch.long)
+    for edge in all_edges_mapped.T:
+        y_count[edge[0]] += 1
+    y_count.to(device)
+    y_count_clamped = y_count.clamp(max=k)
+    discounting_summed = torch.cumsum(discounting, dim=0).to(device)
+    idcg = discounting_summed[y_count_clamped]
+
+    # nominator:
+    #  - take AND of mask and prediction matrices to get a matrix that
+    #    is 1 if the edge was predicted and is actually an edge and that
+    #    is 0 if the edge was not predicted OR is actually not and edge
+    #    --> pred_index_mat
+    #  - make a column vector out of discounting --> discounting.view(1, -1)
+    #  - multiply and sum the matrix and the column vector to get the nominator
+    pred_index_mat = (mask & prediction_mat)
+    dcg = (pred_index_mat * discounting.view(1, -1)).sum(dim=-1)
+    
+    # calculate ndcg
+    ndcg_values = dcg / idcg
+    ndcg = torch.mean(ndcg_values)
+
+    # exclude nodes that have no positive edge in the graph
+    nz_sum = 0.0
+    nz_count = 0
+    for i in range(num_nodes):
+        if y_count[i] > 0:
+            nz_sum +=  ndcg_values[i]
+            nz_count += 1
+    ndcg_without_zeroes = nz_sum / nz_count
+    return ndcg.item(), ndcg_without_zeroes.item()
+
 def process_model_output(x, triplets, pred, true):
     _true = true.detach().to('cpu', non_blocking=True)
     pred = pred.squeeze(-1) if pred.ndim > 1 else pred
@@ -24,10 +116,9 @@ def process_model_output(x, triplets, pred, true):
     _pred = pred.detach().to('cpu', non_blocking=True)
 
     x_triplets = x[triplets]
-    x_triplets_normalized = F.normalize(x_triplets, p=2, dim=-1)
-    anchor = x_triplets_normalized[0]
-    positive = x_triplets_normalized[1]
-    negative = x_triplets_normalized[2]
+    anchor = x_triplets[0]
+    positive = x_triplets[1]
+    negative = x_triplets[2]
 
     return _pred, _true, anchor, positive, negative
 
@@ -38,9 +129,10 @@ def train_epoch(logger, loader, model, optimizer, scheduler, batch_accumulation,
     for iter, batch in enumerate(loader):
         batch.split = 'train'
         batch.to(torch.device(cfg.accelerator))
-        if cfg.dataset.name == "PyG-OLGA_triplet":
+        if cfg.model.loss_fun == 'triplet':
             x, triplets, pred, true = model(batch)
             _pred, _true, anchor, positive, negative = process_model_output(x, triplets, pred, true)
+            #np.savetxt('pred.txt', _pred.numpy())
             loss = triplet_loss(anchor, positive, negative)
         else:
             pred, true = model(batch) # of type LightningModule
@@ -77,66 +169,15 @@ def eval_epoch(logger, loader, model, split='val', triplet_loss=None, calculate_
     for batch in loader:
         batch.split = split
         batch.to(torch.device(cfg.accelerator))
-        if cfg.dataset.name == "PyG-OLGA_triplet":
+        if cfg.model.loss_fun == 'triplet':
             x, triplets, pred, true = model(batch)
             extra_stats = {}
             _pred, _true, anchor, positive, negative = process_model_output(x, triplets, pred, true)
             loss = triplet_loss(anchor, positive, negative)
             if calculate_ndcg:
-                # calculate NDCG @ 200
-                k = 200
                 num_nodes_prev = split_num_nodes[0] if (split == 'val') else split_num_nodes[1]
                 num_nodes = (split_num_nodes[1] - split_num_nodes[0]) if (split == 'val') else (split_num_nodes[2] - split_num_nodes[1])
-                x_eval = x[-num_nodes:]
-                if cfg.model.edge_decoding == "cosine_similarity":
-                    x_cosine_similarity = F.cosine_similarity(x_eval[None,:,:], x_eval[:,None,:], dim=-1)
-                    top_similarities_with_self, top_indices_with_self = torch.topk(x_cosine_similarity, k + 1)
-                elif cfg.model.edge_decoding == "dot":
-                    x_distance = F.pairwise_distance(x_eval[None,:,:], x_eval[:,None,:])
-                    top_similarities_with_self, top_indices_with_self = torch.topk(x_distance, k + 1, largest=False)
-                else:
-                    logging.info(f"edge decoding {cfg.model.edge_decoding} not supported for calculating NDCG")
-                top_indices = top_indices_with_self[:, 1:]
-                top_similarities = top_similarities_with_self[:, 1:]
-                top_predictions = torch.sigmoid(top_similarities)
-                prediction_mat = (top_predictions > cfg.model.thresh)
-
-                # create set of all edges in graph
-                if cfg.dataset.triplets_per_edge == 'two':
-                    all_edges = triplets[[0, 1]]
-                else:
-                    all_edges = torch.cat((triplets[[0, 1]], triplets[[1, 0]]), 1)
-                all_edges_mapped = all_edges - num_nodes_prev
-                edge_set = set(map(tuple, all_edges_mapped.T.tolist())) 
-
-                # create edges from the top 200
-                device = 'cuda' if torch.cuda.is_available() else 'cpu'
-                row_indices = torch.arange(num_nodes).to(device).view(-1, 1).expand_as(top_indices)
-                top_edges = torch.stack((row_indices, top_indices), dim=-1).reshape(-1, 2)
-                
-                # create mask indicating if top edges are actual edges or not
-                mask = torch.tensor([tuple(edge.tolist()) in edge_set for edge in top_edges], device=device).view(num_nodes, k)
-
-                # compute NDCG
-                pred_index_mat = (mask & prediction_mat)
-                y_count = torch.zeros(num_nodes, dtype=torch.long)
-                for edge in all_edges_mapped.T:
-                    y_count[edge[0]] += 1
-                y_count.to(device)
-                multiplier = 1.0 / torch.arange(2, k + 2, dtype=torch.get_default_dtype()).log2().to(device)
-                pre_idcg = torch.cumsum(multiplier, dim=0).to(device)
-                dcg = (pred_index_mat * multiplier.view(1, -1)).sum(dim=-1)
-                idcg = pre_idcg[y_count.clamp(max=k)]
-                ndcg_values = dcg / idcg
-                ndcg_avg = torch.mean(ndcg_values)
-                logging.info(f"NDCG@200 (with zeroes): {ndcg_avg}")
-                nz_sum = 0.0
-                nz_count = 0
-                for val in ndcg_values:
-                    if val != 0.0:
-                        nz_sum += val
-                        nz_count += 1
-                logging.info(f"NDCG@200 (without zeroes): {nz_sum / nz_count}")
+                _, ndcg = calculate_ndcg_at_k(num_nodes_prev, num_nodes, x, triplets)
         else:
             if cfg.gnn.head == 'inductive_edge':
                 pred, true, extra_stats = model(batch)
@@ -159,6 +200,7 @@ def eval_epoch(logger, loader, model, split='val', triplet_loss=None, calculate_
                             lr=0, time_used=time.time() - time_start,
                             params=cfg.params,
                             dataset_name=cfg.dataset.name,
+                            ndcg=(ndcg if calculate_ndcg else None),
                             **extra_stats)
         time_start = time.time()
 
@@ -203,6 +245,7 @@ def custom_train(loggers, loaders, model, optimizer, scheduler, loss=None, split
     full_epoch_times = []
     perf = [[] for _ in range(num_splits)]
     for cur_epoch in range(start_epoch, cfg.optim.max_epoch):
+        calculate_ndcg = ((cur_epoch + 1) % cfg.ndcg_metric.rate == 0) if cfg.ndcg_metric.use else False
         start_time = time.perf_counter()
         if cfg.dataset.name == 'PyG-OLGA_triplet':
             train_epoch(loggers[0], loaders[0], model, optimizer, scheduler,
@@ -217,7 +260,7 @@ def custom_train(loggers, loaders, model, optimizer, scheduler, loss=None, split
                 if cfg.dataset.name == 'PyG-OLGA_triplet':
                     eval_epoch(loggers[i], loaders[i], model,
                               split=split_names[i - 1], triplet_loss=loss, 
-                              calculate_ndcg=((cur_epoch + 1) % 10 == 0),
+                              calculate_ndcg=calculate_ndcg,
                               split_num_nodes=split_num_nodes)
                 else:
                     eval_epoch(loggers[i], loaders[i], model,

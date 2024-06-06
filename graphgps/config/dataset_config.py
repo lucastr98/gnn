@@ -33,3 +33,5 @@ def dataset_cfg(cfg):
     cfg.dataset.triplets_per_edge = "two"
     
     cfg.dataset.embedding = None
+
+    cfg.dataset.features = 'random'
