@@ -14,7 +14,9 @@ from graphgps.utils import cfg_to_dict, flatten_dict, make_wandb_name
 
 import torch.nn.functional as F
 
-def calculate_ndcg_at_k(k, smallest_idx, num_nodes, x, triplets):
+def calculate_ndcg_at_k(smallest_idx, num_nodes, x, triplets):
+    k = cfg.ndcg_metric.k
+
     # calculate pairwise similarities and get closest k points
     x_eval = x[-num_nodes:]
     x_eval_normalized = F.normalize(x_eval, p=2, dim=-1)
@@ -174,8 +176,7 @@ def eval_epoch(logger, loader, model, split='val', triplet_loss=None, calculate_
             if calculate_ndcg:
                 num_nodes_prev = split_num_nodes[0] if (split == 'val') else split_num_nodes[1]
                 num_nodes = (split_num_nodes[1] - split_num_nodes[0]) if (split == 'val') else (split_num_nodes[2] - split_num_nodes[1])
-                _, ndcg = calculate_ndcg_at_k(200, num_nodes_prev, num_nodes, x, triplets)
-                print(f"NDCG@200: {round(ndcg, 3)}")
+                _, ndcg = calculate_ndcg_at_k(num_nodes_prev, num_nodes, x, triplets)
         else:
             if cfg.gnn.head == 'inductive_edge':
                 pred, true, extra_stats = model(batch)
@@ -243,7 +244,7 @@ def custom_train(loggers, loaders, model, optimizer, scheduler, loss=None, split
     full_epoch_times = []
     perf = [[] for _ in range(num_splits)]
     for cur_epoch in range(start_epoch, cfg.optim.max_epoch):
-        calculate_ndcg = ((cur_epoch + 1) % 10 == 0)
+        calculate_ndcg = ((cur_epoch + 1) % cfg.ndcg_metric.rate == 0) if cfg.ndcg_metric.use else False
         start_time = time.perf_counter()
         if cfg.dataset.name == 'PyG-OLGA_triplet':
             train_epoch(loggers[0], loaders[0], model, optimizer, scheduler,

@@ -52,3 +52,7 @@ optim:
   schedule_patience: 20
   min_lr: 1e-5
   triplet_loss_margin: 1.0
+ndcg_metric:
+  use: True
+  k: 200
+  rate: 10
