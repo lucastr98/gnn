@@ -8,6 +8,7 @@ from typing import Union
 from torch_geometric.data import Data, HeteroData
 from torch_geometric.utils import structured_negative_sampling
 import torch.nn as nn
+import torch.nn.functional as F
 
 import graphgps  # noqa, register custom modules
 from graphgps.agg_runs import agg_runs
@@ -431,8 +432,8 @@ if __name__ == '__main__':
         # because their compute_loss function expects a (pred, true) tuple
         # but the triplet loss needs triplets 
         if cfg.model.loss_fun == 'triplet':
-            if cfg.model.edge_decoding != 'euclidean':
-                logging.warning("[WARN] triplet loss only works with euclidean distance.")
+            if cfg.model.edge_decoding != 'euclidean' and cfg.model.edge_decoding != 'cosine_similarity':
+                logging.warning("[WARN] triplet loss only works with euclidean or cosine_similarity")
             cfg.model.loss_fun = 'cross_entropy'
             model = create_model()
             cfg.model.loss_fun = 'triplet'
@@ -448,7 +449,11 @@ if __name__ == '__main__':
                                      new_optimizer_config(cfg))
         scheduler = create_scheduler(optimizer, new_scheduler_config(cfg))
         if cfg.model.loss_fun == 'triplet':
-            loss = nn.TripletMarginLoss(margin=cfg.optim.triplet_loss_margin)
+            if cfg.model.edge_decoding == 'euclidean':
+                loss = nn.TripletMarginWithDistanceLoss(distance_function=nn.PairwiseDistance(), margin=cfg.optim.triplet_loss_margin)
+            elif cfg.model.edge_decoding == 'cosine_similarity':
+                loss = nn.TripletMarginWithDistanceLoss(distance_function=lambda x, y: 1.0 - F.cosine_similarity(x, y), margin=cfg.optim.triplet_loss_margin)
+            
         # Print model info
         logging.info(model)
         logging.info(cfg)
