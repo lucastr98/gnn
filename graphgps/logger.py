@@ -63,12 +63,12 @@ class CustomLogger(Logger):
     # task properties
     def classification_binary(self):
         true = torch.cat(self._true).squeeze(-1)
-        
-        # # this is needed if metric switched
-        # pred_score = -torch.cat(self._pred)
-        # pred_int = (-pred_score < 0.61).int()      
         pred_score = torch.cat(self._pred)
         pred_int = self._get_pred_int(pred_score)
+        
+        # # this is needed if using euclidean distance (not euclidean similarity)
+        # pred_score = -torch.cat(self._pred)
+        # pred_int = (-pred_score < 0.61).int()      
 
         if true.shape[0] < 1e7:  # AUROC computation for very large datasets is too slow.
             # TorchMetrics AUROC on GPU if available.

@@ -20,16 +20,14 @@ def calculate_ndcg_at_k(smallest_idx, num_nodes, x, triplets):
     # calculate pairwise similarities and get closest k points
     x_eval = x[-num_nodes:]
     if cfg.model.edge_decoding == "cosine_similarity":
-        # cosine similarity is large if vectors are close
         x_cosine_similarity = F.cosine_similarity(x_eval[None,:,:], x_eval[:,None,:], dim=-1)
         top_similarities_with_self, top_indices_with_self = torch.topk(x_cosine_similarity, k + 1)
     elif cfg.model.edge_decoding == "euclidean":
-        # euclidean distance is small if vectors are close
         x_euclidean = F.pairwise_distance(x_eval[None,:,:], x_eval[:,None,:])
         x_euclidean = 1 / (1 + x_euclidean)
+        # x_euclidean = torch.exp(x_euclidean)
         top_similarities_with_self, top_indices_with_self = torch.topk(x_euclidean, k + 1)
     elif cfg.model.edge_decoding == "dot":
-        # dot product is large large if vectors are close
         x_dot = torch.sum(x_eval[None, :, :] * x_eval[:, None, :], dim=-1)
         top_similarities_with_self, top_indices_with_self = torch.topk(x_dot, k + 1)
     else:
@@ -41,7 +39,6 @@ def calculate_ndcg_at_k(smallest_idx, num_nodes, x, triplets):
 
     # create predictions of top k closest nodes
     top_predictions = torch.sigmoid(top_similarities)
-    # prediction_mat = (top_predictions < cfg.model.thresh)
     prediction_mat = (top_predictions > cfg.model.thresh)
 
     # create set of all positive edges in graph
