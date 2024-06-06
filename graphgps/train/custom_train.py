@@ -27,7 +27,7 @@ def calculate_ndcg_at_k(smallest_idx, num_nodes, x, triplets):
         # euclidean distance is small if vectors are close
         x_euclidean = F.pairwise_distance(x_eval[None,:,:], x_eval[:,None,:])
         x_euclidean = 1 / (1 + x_euclidean)
-        top_similarities_with_self, top_indices_with_self = torch.topk(x_euclidean, k + 1, largest=False)
+        top_similarities_with_self, top_indices_with_self = torch.topk(x_euclidean, k + 1)
     elif cfg.model.edge_decoding == "dot":
         # dot product is large large if vectors are close
         x_dot = torch.sum(x_eval[None, :, :] * x_eval[:, None, :], dim=-1)
@@ -132,7 +132,7 @@ def train_epoch(logger, loader, model, optimizer, scheduler, batch_accumulation,
         if cfg.model.loss_fun == 'triplet':
             x, triplets, pred, true = model(batch)
             _pred, _true, anchor, positive, negative = process_model_output(x, triplets, pred, true)
-            np.savetxt('pred.txt', _pred.numpy())
+            #np.savetxt('pred.txt', _pred.numpy())
             loss = triplet_loss(anchor, positive, negative)
         else:
             pred, true = model(batch) # of type LightningModule
