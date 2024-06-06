@@ -19,18 +19,18 @@ def calculate_ndcg_at_k(smallest_idx, num_nodes, x, triplets):
 
     # calculate pairwise similarities and get closest k points
     x_eval = x[-num_nodes:]
-    x_eval_normalized = F.normalize(x_eval, p=2, dim=-1)
     if cfg.model.edge_decoding == "cosine_similarity":
         # cosine similarity is large if vectors are close
-        x_cosine_similarity = F.cosine_similarity(x_eval_normalized[None,:,:], x_eval_normalized[:,None,:], dim=-1)
+        x_cosine_similarity = F.cosine_similarity(x_eval[None,:,:], x_eval[:,None,:], dim=-1)
         top_similarities_with_self, top_indices_with_self = torch.topk(x_cosine_similarity, k + 1)
     elif cfg.model.edge_decoding == "euclidean":
         # euclidean distance is small if vectors are close
-        x_euclidean = F.pairwise_distance(x_eval_normalized[None,:,:], x_eval_normalized[:,None,:])
+        x_euclidean = F.pairwise_distance(x_eval[None,:,:], x_eval[:,None,:])
+        x_euclidean = 1 / (1 + x_euclidean)
         top_similarities_with_self, top_indices_with_self = torch.topk(x_euclidean, k + 1, largest=False)
     elif cfg.model.edge_decoding == "dot":
         # dot product is large large if vectors are close
-        x_dot = torch.sum(x_eval_normalized[None, :, :] * x_eval_normalized[:, None, :], dim=-1)
+        x_dot = torch.sum(x_eval[None, :, :] * x_eval[:, None, :], dim=-1)
         top_similarities_with_self, top_indices_with_self = torch.topk(x_dot, k + 1)
     else:
         logging.info(f"edge decoding {cfg.model.edge_decoding} not supported for calculating NDCG")
@@ -116,10 +116,9 @@ def process_model_output(x, triplets, pred, true):
     _pred = pred.detach().to('cpu', non_blocking=True)
 
     x_triplets = x[triplets]
-    x_triplets_normalized = F.normalize(x_triplets, p=2, dim=-1)
-    anchor = x_triplets_normalized[0]
-    positive = x_triplets_normalized[1]
-    negative = x_triplets_normalized[2]
+    anchor = x_triplets[0]
+    positive = x_triplets[1]
+    negative = x_triplets[2]
 
     return _pred, _true, anchor, positive, negative
 

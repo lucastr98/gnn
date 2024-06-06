@@ -20,6 +20,7 @@ dataset:
   embedding: None
   split_mode: custom
   triplets_per_edge: two
+  features: 'acousticbrainz'
 train:
   mode: custom
   batch_size: 16
@@ -30,7 +31,7 @@ model:
   loss_fun: triplet
   edge_decoding: euclidean
   graph_pooling: add
-  thresh: 0.61 # 0.65
+  thresh: 0.7 # 0.65
 gnn:
   head: transductive_edge
   layers_pre_mp: 0
@@ -45,13 +46,14 @@ gnn:
 optim:
   optimizer: adamW
   weight_decay: 0.05
-  base_lr: 0.0001
+  base_lr: 0.001
   max_epoch: 200
   scheduler: reduce_on_plateau
   reduce_factor: 0.5
   schedule_patience: 20
   min_lr: 1e-5
   triplet_loss_margin: 1.0
+  normalize_embds: True
 ndcg_metric:
   use: True
   k: 200

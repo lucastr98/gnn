@@ -77,7 +77,10 @@ class GNNTransductiveEdgeHead(torch.nn.Module):
                 edges = torch.cat((triplets[[0, 1]], triplets[[0, 2]]), 1)
                 labels = torch.cat((torch.ones(triplets.size(1), dtype=int), 
                                     torch.zeros(triplets.size(1), dtype=int)))
-            return triplets, batch.x[edges], labels
+            if cfg.optim.normalize_embds:
+              return triplets, F.normalize(batch.x[edges], p=2, dim=-1), labels
+            else:
+              return triplets, batch.x[edges], labels
         else:
             index = f'{batch.split}_edge_index'
             label = f'{batch.split}_edge_label'
@@ -93,7 +96,10 @@ class GNNTransductiveEdgeHead(torch.nn.Module):
             nodes_first = pred[0]
             nodes_second = pred[1]
             pred = self.decode_module(nodes_first, nodes_second)
-            return batch.x, triplets, pred, label
+            if cfg.optim.normalize_embds:
+              return F.normalize(batch.x, p=2, dim=-1), triplets, pred, label
+            else:
+              return batch.x, triplets, pred, label
         else:
             pred, label = self._apply_index(batch)
             nodes_first = pred[0]
