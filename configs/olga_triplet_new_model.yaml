@@ -38,8 +38,8 @@ gnn:
   layers_post_mp: 2
   linear_output_layer: 100 # set to -1 to disable
   dim_inner: 256
-  layer_type: gatedgcnconv
-  act: elu
+  layer_type: sageconv
+  act: relu
   residual: False
   dropout: 0.0
 optim:

@@ -41,7 +41,8 @@ def calculate_ndcg_at_k(smallest_idx, num_nodes, x, triplets):
 
     # create predictions of top k closest nodes
     top_predictions = torch.sigmoid(top_similarities)
-    prediction_mat = (top_predictions < cfg.model.thresh)
+    # prediction_mat = (top_predictions < cfg.model.thresh)
+    prediction_mat = (top_predictions > cfg.model.thresh)
 
     # create set of all positive edges in graph
     # set contains both configurations: (v1, v2) and (v2, v1)
@@ -132,6 +133,7 @@ def train_epoch(logger, loader, model, optimizer, scheduler, batch_accumulation,
         if cfg.model.loss_fun == 'triplet':
             x, triplets, pred, true = model(batch)
             _pred, _true, anchor, positive, negative = process_model_output(x, triplets, pred, true)
+            np.savetxt('pred.txt', _pred.numpy())
             loss = triplet_loss(anchor, positive, negative)
         else:
             pred, true = model(batch) # of type LightningModule
