@@ -25,8 +25,9 @@ def calculate_ndcg_at_k(smallest_idx, num_nodes, x, triplets):
     elif cfg.model.edge_decoding == "euclidean":
         x_euclidean = F.pairwise_distance(x_eval[None,:,:], x_eval[:,None,:])
         x_euclidean = 1 / (1 + x_euclidean)
-        # x_euclidean = torch.exp(x_euclidean)
+        # x_euclidean = torch.exp(-x_euclidean)
         top_similarities_with_self, top_indices_with_self = torch.topk(x_euclidean, k + 1)
+        # top_similarities_with_self, top_indices_with_self = torch.topk(x_euclidean, k + 1, largest=False)
     elif cfg.model.edge_decoding == "dot":
         x_dot = torch.sum(x_eval[None, :, :] * x_eval[:, None, :], dim=-1)
         top_similarities_with_self, top_indices_with_self = torch.topk(x_dot, k + 1)
@@ -35,11 +36,6 @@ def calculate_ndcg_at_k(smallest_idx, num_nodes, x, triplets):
 
     # best similarity is always similarity to self --> remove
     top_indices = top_indices_with_self[:, 1:]
-    top_similarities = top_similarities_with_self[:, 1:]
-
-    # create predictions of top k closest nodes
-    top_predictions = torch.sigmoid(top_similarities)
-    prediction_mat = (top_predictions > cfg.model.thresh)
 
     # create set of all positive edges in graph
     # set contains both configurations: (v1, v2) and (v2, v1)
@@ -65,6 +61,11 @@ def calculate_ndcg_at_k(smallest_idx, num_nodes, x, triplets):
     # discounting factor
     discounting = 1.0 / torch.arange(2, k + 2, dtype=torch.get_default_dtype()).log2().to(device)
 
+    # nominator:
+    #   - make a column vector out of discounting --> discounting.view(1, -1)
+    #   - multiply and sum the matrix and the column vector to get the nominator
+    dcg = (mask * discounting.view(1, -1)).sum(dim=-1)
+    
     # denominator: 
     #   - count the number of actual neighbors per node --> y_count
     #   - clamp the count s.t. it's at most 200 --> y_count_clamped
@@ -79,16 +80,6 @@ def calculate_ndcg_at_k(smallest_idx, num_nodes, x, triplets):
     discounting_summed = torch.cumsum(discounting, dim=0).to(device)
     idcg = discounting_summed[y_count_clamped]
 
-    # nominator:
-    #  - take AND of mask and prediction matrices to get a matrix that
-    #    is 1 if the edge was predicted and is actually an edge and that
-    #    is 0 if the edge was not predicted OR is actually not and edge
-    #    --> pred_index_mat
-    #  - make a column vector out of discounting --> discounting.view(1, -1)
-    #  - multiply and sum the matrix and the column vector to get the nominator
-    pred_index_mat = (mask & prediction_mat)
-    dcg = (pred_index_mat * discounting.view(1, -1)).sum(dim=-1)
-    
     # calculate ndcg
     ndcg_values = dcg / idcg
     ndcg = torch.mean(ndcg_values)
@@ -101,6 +92,7 @@ def calculate_ndcg_at_k(smallest_idx, num_nodes, x, triplets):
             nz_sum +=  ndcg_values[i]
             nz_count += 1
     ndcg_without_zeroes = nz_sum / nz_count
+
     return ndcg.item(), ndcg_without_zeroes.item()
 
 def process_model_output(x, triplets, pred, true):
