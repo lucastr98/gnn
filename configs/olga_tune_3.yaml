@@ -3,7 +3,7 @@ metric_best: auc
 wandb:
   entity: lucastr
   use: True
-  project: OLGA-tuning3
+  project: OLGA-tuning4
 dataset:
   format: PyG-OLGA_triplet
   name: PyG-OLGA_triplet
@@ -52,7 +52,7 @@ optim:
   reduce_factor: 0.5
   schedule_patience: 20
   min_lr: 1e-5
-  triplet_loss_margin: 0.5
+  triplet_loss_margin: 0.4
   normalize_embds: True
 ndcg_metric:
   use: True

@@ -3,7 +3,7 @@ metric_best: auc
 wandb:
   entity: lucastr
   use: True
-  project: OLGA-tuning2
+  project: OLGA-tuning4
 dataset:
   format: PyG-OLGA_triplet
   name: PyG-OLGA_triplet
@@ -29,7 +29,7 @@ train:
 model:
   type: custom_gnn
   loss_fun: triplet
-  edge_decoding: euclidean
+  edge_decoding: cosine_similarity
   graph_pooling: add
   thresh: 0.62
 gnn:
@@ -52,7 +52,7 @@ optim:
   reduce_factor: 0.5
   schedule_patience: 20
   min_lr: 1e-5
-  triplet_loss_margin: 1.0
+  triplet_loss_margin: 0.5
   normalize_embds: True
 ndcg_metric:
   use: True
