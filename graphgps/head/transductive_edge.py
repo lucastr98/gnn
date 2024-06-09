@@ -59,7 +59,7 @@ class GNNTransductiveEdgeHead(torch.nn.Module):
             elif cfg.model.edge_decoding == 'euclidean':
                 # self.decode_module = lambda v1, v2: torch.sqrt(torch.sum((v1 - v2) ** 2, dim=-1))
                 self.decode_module = lambda v1, v2: 1 / (1 + torch.sqrt(torch.sum((v1 - v2) ** 2, dim=-1)))
-                # self.decode_module = lambda v1, v2: torch.exp(1 + torch.sqrt(torch.sum((v1 - v2) ** 2, dim=-1)))
+                # self.decode_module = lambda v1, v2: torch.exp(-torch.sqrt(torch.sum((v1 - v2) ** 2, dim=-1)))
             elif cfg.model.edge_decoding == 'cosine_similarity':
                 self.decode_module = torch.nn.CosineSimilarity(dim=-1)
             else:
