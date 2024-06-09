@@ -31,7 +31,7 @@ model:
   loss_fun: triplet
   edge_decoding: euclidean
   graph_pooling: add
-  thresh: 0.64 # 0.65
+  thresh: 0.62
 gnn:
   head: transductive_edge
   layers_pre_mp: 0
