@@ -25,7 +25,7 @@ def calculate_ndcg_at_k(smallest_idx, num_nodes, x, triplets):
     elif cfg.model.edge_decoding == "euclidean":
         x_euclidean = F.pairwise_distance(x_eval[None,:,:], x_eval[:,None,:])
         x_euclidean = 1 / (1 + x_euclidean)
-        # x_euclidean = torch.exp(x_euclidean)
+        # x_euclidean = torch.exp(-x_euclidean)
         top_similarities_with_self, top_indices_with_self = torch.topk(x_euclidean, k + 1)
         # top_similarities_with_self, top_indices_with_self = torch.topk(x_euclidean, k + 1, largest=False)
     elif cfg.model.edge_decoding == "dot":
