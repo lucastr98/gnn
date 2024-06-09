@@ -3,7 +3,7 @@ metric_best: auc
 wandb:
   entity: lucastr
   use: True
-  project: OLGA-tuning4
+  project: OLGA-tuning5
 dataset:
   format: PyG-OLGA_triplet
   name: PyG-OLGA_triplet
@@ -38,7 +38,7 @@ gnn:
   layers_mp: 3
   layers_post_mp: 2
   linear_output_layer: 100 # set to -1 to disable
-  dim_inner: 256
+  dim_inner: 128
   layer_type: sageconv
   act: relu
   residual: False
@@ -52,7 +52,7 @@ optim:
   reduce_factor: 0.5
   schedule_patience: 20
   min_lr: 1e-5
-  triplet_loss_margin: 0.4
+  triplet_loss_margin: 0.2
   normalize_embds: True
 ndcg_metric:
   use: True
