@@ -220,6 +220,7 @@ class DISCOOLGATriplet(InMemoryDataset):
                                                   num_nodes=num_val_nodes, 
                                                   contains_neg_self_loops=False)
             data['val_triplets'] = torch.stack((a, p, n)) + num_train_nodes
+            torch.save(data['val_triplets'], 'val_triplets_two.pt')
         else:
             if self.triplets_per_edge == "two":
                 data['val_triplets'] = torch.load(os.path.join(self.raw_dir, 'olga_data/val_triplets_two.pt'))
@@ -243,6 +244,7 @@ class DISCOOLGATriplet(InMemoryDataset):
                                                   num_nodes=num_test_nodes, 
                                                   contains_neg_self_loops=False)
             data['test_triplets'] = torch.stack((a, p, n)) + (num_train_nodes + num_val_nodes)
+            torch.save(data['test_triplets'], 'test_triplets_two.pt')
         else:
             if self.triplets_per_edge == "two":
                 data['test_triplets'] = torch.load(os.path.join(self.raw_dir, 'olga_data/test_triplets_two.pt'))
