@@ -3,10 +3,10 @@ metric_best: auc
 wandb:
   entity: lucastr
   use: True
-  project: OLGA
+  project: DISCO-OLGA
 dataset:
-  format: PyG-OLGA_triplet
-  name: PyG-OLGA_triplet
+  format: PyG-DISCOOLGA_triplet
+  name: PyG-DISCOOLGA_triplet
   task: link_pred
   task_type: classification
   transductive: True

@@ -321,7 +321,7 @@ def custom_get_loader(dataset, sampler, batch_size, shuffle=True, split='train',
                                    shuffle=shuffle,
                                    batch_size=batch_size,
                                    pin_memory=True, persistent_workers=pw)
-    elif name == 'PyG-OLGA_triplet':
+    elif name == 'PyG-OLGA_triplet' or name == 'PyG-DISCOOLGA_triplet':
         loader_train = OLGATripletSampler(dataset[0], split=split,
                                           shuffle=shuffle,
                                           batch_size=batch_size,
