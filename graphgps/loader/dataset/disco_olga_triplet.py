@@ -98,13 +98,13 @@ class DISCOOLGATriplet(InMemoryDataset):
         num_nodes = shape[0]
 
         # get train/val/test node split
-        train_m = np.load(os.path.join(self.raw_dir, 'disco-olga_data/train_mask.npz')) 
+        train_m = np.load(os.path.join(self.raw_dir, 'disco-olga_data/train_mask.npy')) 
         train_indices = train_m['indices']
         num_train_nodes = len(train_indices)
-        val_m = np.load(os.path.join(self.raw_dir, 'disco-olga_data/val_mask.npz')) 
+        val_m = np.load(os.path.join(self.raw_dir, 'disco-olga_data/val_mask.npy')) 
         val_indices = val_m['indices']
         num_val_nodes = len(val_indices)
-        test_m = np.load(os.path.join(self.raw_dir, 'disco-olga_data/test_mask.npz')) 
+        test_m = np.load(os.path.join(self.raw_dir, 'disco-olga_data/test_mask.npy')) 
         test_indices = test_m['indices']
         num_test_nodes = len(test_indices)
         train_edge_indices = []
