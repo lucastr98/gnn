@@ -37,7 +37,7 @@ class DISCOOLGATriplet(InMemoryDataset):
         force_reload (bool, optional): Whether to re-process the dataset.
             (default: :obj:`False`)
     """
-    url = 'https://polybox.ethz.ch/index.php/s/fXEnDk6GOsUi0EH/download'
+    url = 'https://polybox.ethz.ch/index.php/s/Z23bz1Vvu0ZoHKi/download'
     
     def __init__(
         self,
@@ -203,7 +203,7 @@ class DISCOOLGATriplet(InMemoryDataset):
         # train
         data['train_edge_index'] = mapped_train_edges_torch
         
-        resample_eval_triplets = True
+        resample_eval_triplets = False
 
         # val
         if resample_eval_triplets:
@@ -222,9 +222,9 @@ class DISCOOLGATriplet(InMemoryDataset):
             data['val_triplets'] = torch.stack((a, p, n)) + num_train_nodes
         else:
             if self.triplets_per_edge == "two":
-                data['val_triplets'] = torch.load(os.path.join(self.raw_dir, 'olga_data/val_triplets_two.pt'))
+                data['val_triplets'] = torch.load(os.path.join(self.raw_dir, 'disco-olga_data/val_triplets_two.pt'))
             else:
-                data['val_triplets'] = torch.load(os.path.join(self.raw_dir, 'olga_data/val_triplets_one.pt'))
+                data['val_triplets'] = torch.load(os.path.join(self.raw_dir, 'disco-olga_data/val_triplets_one.pt'))
                 
             
 
@@ -245,9 +245,9 @@ class DISCOOLGATriplet(InMemoryDataset):
             data['test_triplets'] = torch.stack((a, p, n)) + (num_train_nodes + num_val_nodes)
         else:
             if self.triplets_per_edge == "two":
-                data['test_triplets'] = torch.load(os.path.join(self.raw_dir, 'olga_data/test_triplets_two.pt'))
+                data['test_triplets'] = torch.load(os.path.join(self.raw_dir, 'disco-olga_data/test_triplets_two.pt'))
             else:
-                data['test_triplets'] = torch.load(os.path.join(self.raw_dir, 'olga_data/test_triplets_one.pt'))
+                data['test_triplets'] = torch.load(os.path.join(self.raw_dir, 'disco-olga_data/test_triplets_one.pt'))
 
 
         # save data
