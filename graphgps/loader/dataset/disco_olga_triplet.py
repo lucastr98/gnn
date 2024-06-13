@@ -22,7 +22,7 @@ from torch_geometric.data import (
 )
 
 
-class OLGATriplet(InMemoryDataset):
+class DISCOOLGATriplet(InMemoryDataset):
     r"""
     Args:
         root (str): Root directory where the dataset should be saved.
@@ -37,7 +37,7 @@ class OLGATriplet(InMemoryDataset):
         force_reload (bool, optional): Whether to re-process the dataset.
             (default: :obj:`False`)
     """
-    url = 'https://polybox.ethz.ch/index.php/s/TBb46cm6mZvVZk0/download'
+    url = 'https://polybox.ethz.ch/index.php/s/Z23bz1Vvu0ZoHKi/download'
     
     def __init__(
         self,
@@ -59,11 +59,16 @@ class OLGATriplet(InMemoryDataset):
     @property
     def raw_file_names(self) -> List[str]:
         return [
+            'similar_to.npz',
+            'influenced_by.npz',
+            'followed_by.npz',
+            'associated_with.npz'
+            'collaborated_with.npz',
+            'train_mask.npy',
+            'val_mask.npy',
+            'test_mask.npy',
             'acousticbrainz.npy',
-            'artist_connections.npz',
-            'train_mask.npz',
-            'val_mask.npz',
-            'test_mask.npz',
+            'moods_themes.npy',
             'clap.npy',
             'val_triplets_one',
             'val_triplets_two',
@@ -82,7 +87,7 @@ class OLGATriplet(InMemoryDataset):
 
     def process(self) -> None:
         # get edges
-        ac = np.load(os.path.join(self.raw_dir, 'olga_data/artist_connections.npz'))
+        ac = np.load(os.path.join(self.raw_dir, 'disco-olga_data/similar_to.npz'))
         indices = ac['indices']
         indptr = ac['indptr']
         data = ac['data']
@@ -93,14 +98,11 @@ class OLGATriplet(InMemoryDataset):
         num_nodes = shape[0]
 
         # get train/val/test node split
-        train_m = np.load(os.path.join(self.raw_dir, 'olga_data/train_mask.npz')) 
-        train_indices = train_m['indices']
-        num_train_nodes = len(train_indices) # 14139
-        val_m = np.load(os.path.join(self.raw_dir, 'olga_data/val_mask.npz')) 
-        val_indices = val_m['indices']
-        num_val_nodes = len(val_indices) # 1767
-        test_m = np.load(os.path.join(self.raw_dir, 'olga_data/test_mask.npz')) 
-        test_indices = test_m['indices'] # 1767
+        train_indices = np.load(os.path.join(self.raw_dir, 'disco-olga_data/train_mask.npy')) 
+        num_train_nodes = len(train_indices)
+        val_indices = np.load(os.path.join(self.raw_dir, 'disco-olga_data/val_mask.npy')) 
+        num_val_nodes = len(val_indices)
+        test_indices = np.load(os.path.join(self.raw_dir, 'disco-olga_data/test_mask.npy')) 
         num_test_nodes = len(test_indices)
         train_edge_indices = []
         val_graph_edge_indices = []
@@ -159,10 +161,12 @@ class OLGATriplet(InMemoryDataset):
 
         # features (trivial at the moment)
         # Comment: x_test is called x such that graphgym derives correct cfg.share.dim_in
-        acousticbrainz_features = np.load(os.path.join(self.raw_dir, 'olga_data/acousticbrainz.npy'))
-        clap_features = np.load(os.path.join(self.raw_dir, 'olga_data/clap.npy'))
+        which_features = 'acousticbrainz_clap' # rand, acousticbrainz, clap, acousticbrainz_clap
+        acousticbrainz_features = np.load(os.path.join(self.raw_dir, 'disco-olga_data/acousticbrainz.npy'))
+        clap_features = np.load(os.path.join(self.raw_dir, 'disco-olga_data/clap.npy'))
+        moods_themes_features = np.load(os.path.join(self.raw_dir, 'disco-olga_data/moods_themes.npy'))
         rand_features = np.random.rand(num_nodes, 2613).astype(np.float32)
-        if cfg.dataset.features == 'random':
+        if cfg.dataset.features == 'rand':
             features = rand_features
         elif cfg.dataset.features == 'acousticbrainz':
             features = acousticbrainz_features
@@ -170,6 +174,12 @@ class OLGATriplet(InMemoryDataset):
             features = clap_features
         elif cfg.dataset.features == 'acousticbrainz_clap':
             features = np.hstack((acousticbrainz_features, clap_features))
+        elif cfg.dataset.features == 'acousticbrainz_moods-themes':
+            features = np.hstack((acousticbrainz_features, moods_themes_features))
+        elif cfg.dataset.features == 'clap_moods-themes':
+            features = np.hstack((clap_features, moods_themes_features))
+        elif cfg.dataset.features == 'acousticbrainz_clap_moods-themes':
+            features = np.hstack((clap_features, moods_themes_features))
         else:
             logging.info(f'cfg.dataset.features is incorrect: {cfg.dataset.features}')
             exit(0)
@@ -212,9 +222,9 @@ class OLGATriplet(InMemoryDataset):
             data['val_triplets'] = torch.stack((a, p, n)) + num_train_nodes
         else:
             if self.triplets_per_edge == "two":
-                data['val_triplets'] = torch.load(os.path.join(self.raw_dir, 'olga_data/val_triplets_two.pt'))
+                data['val_triplets'] = torch.load(os.path.join(self.raw_dir, 'disco-olga_data/val_triplets_two.pt'))
             else:
-                data['val_triplets'] = torch.load(os.path.join(self.raw_dir, 'olga_data/val_triplets_one.pt'))
+                data['val_triplets'] = torch.load(os.path.join(self.raw_dir, 'disco-olga_data/val_triplets_one.pt'))
                 
             
 
@@ -235,9 +245,9 @@ class OLGATriplet(InMemoryDataset):
             data['test_triplets'] = torch.stack((a, p, n)) + (num_train_nodes + num_val_nodes)
         else:
             if self.triplets_per_edge == "two":
-                data['test_triplets'] = torch.load(os.path.join(self.raw_dir, 'olga_data/test_triplets_two.pt'))
+                data['test_triplets'] = torch.load(os.path.join(self.raw_dir, 'disco-olga_data/test_triplets_two.pt'))
             else:
-                data['test_triplets'] = torch.load(os.path.join(self.raw_dir, 'olga_data/test_triplets_one.pt'))
+                data['test_triplets'] = torch.load(os.path.join(self.raw_dir, 'disco-olga_data/test_triplets_one.pt'))
 
 
         # save data

@@ -21,6 +21,7 @@ from graphgps.loader.dataset.voc_superpixels import VOCSuperpixels
 from graphgps.loader.dataset.lastfm import LastFM
 from graphgps.loader.dataset.olga import OLGA
 from graphgps.loader.dataset.olga_triplet import OLGATriplet
+from graphgps.loader.dataset.disco_olga_triplet import DISCOOLGATriplet
 from graphgps.loader.split_generator import (prepare_splits,
                                              set_dataset_splits)
 from graphgps.transform.posenc_stats import compute_posenc_stats
@@ -126,6 +127,9 @@ def load_dataset_master(format, name, dataset_dir):
 
         elif pyg_dataset_id == 'OLGA_triplet':
             dataset = OLGATriplet(dataset_dir, triplets_per_edge=cfg.dataset.triplets_per_edge, embedding=cfg.dataset.embedding)
+
+        elif pyg_dataset_id == 'DISCOOLGA_triplet':
+            dataset = DISCOOLGATriplet(dataset_dir, triplets_per_edge=cfg.dataset.triplets_per_edge, embedding=cfg.dataset.embedding)
 
         elif pyg_dataset_id == 'TUDataset':
             dataset = preformat_TUDataset(dataset_dir, name)
