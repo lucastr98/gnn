@@ -3,7 +3,7 @@ metric_best: auc
 wandb:
   entity: lucastr
   use: True
-  project: OLGA-eval
+  project: OLGA-eval-2
 dataset:
   format: PyG-OLGA_triplet
   name: PyG-OLGA_triplet
