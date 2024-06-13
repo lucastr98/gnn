@@ -37,7 +37,7 @@ class DISCOOLGATriplet(InMemoryDataset):
         force_reload (bool, optional): Whether to re-process the dataset.
             (default: :obj:`False`)
     """
-    url = 'https://polybox.ethz.ch/index.php/s/c2tHBz7P2HefGUl/download'
+    url = 'https://polybox.ethz.ch/index.php/s/fXEnDk6GOsUi0EH/download'
     
     def __init__(
         self,
@@ -69,11 +69,11 @@ class DISCOOLGATriplet(InMemoryDataset):
             'test_mask.npy',
             'acousticbrainz.npy',
             'moods_themes.npy',
-            'clap.npy' #,
-            # 'val_triplets_one',
-            # 'val_triplets_two',
-            # 'test_triplets_one',
-            # 'test_triplets_two'
+            'clap.npy',
+            'val_triplets_one',
+            'val_triplets_two',
+            'test_triplets_one',
+            'test_triplets_two'
         ]
 
     @property
@@ -220,7 +220,6 @@ class DISCOOLGATriplet(InMemoryDataset):
                                                   num_nodes=num_val_nodes, 
                                                   contains_neg_self_loops=False)
             data['val_triplets'] = torch.stack((a, p, n)) + num_train_nodes
-            torch.save(data['val_triplets'], 'val_triplets_two.pt')
         else:
             if self.triplets_per_edge == "two":
                 data['val_triplets'] = torch.load(os.path.join(self.raw_dir, 'olga_data/val_triplets_two.pt'))
@@ -244,7 +243,6 @@ class DISCOOLGATriplet(InMemoryDataset):
                                                   num_nodes=num_test_nodes, 
                                                   contains_neg_self_loops=False)
             data['test_triplets'] = torch.stack((a, p, n)) + (num_train_nodes + num_val_nodes)
-            torch.save(data['test_triplets'], 'test_triplets_two.pt')
         else:
             if self.triplets_per_edge == "two":
                 data['test_triplets'] = torch.load(os.path.join(self.raw_dir, 'olga_data/test_triplets_two.pt'))

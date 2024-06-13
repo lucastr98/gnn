@@ -236,7 +236,7 @@ def custom_train(loggers, loaders, model, optimizer, scheduler, loss=None, split
     for cur_epoch in range(start_epoch, cfg.optim.max_epoch):
         calculate_ndcg = ((cur_epoch + 1) % cfg.ndcg_metric.rate == 0) if cfg.ndcg_metric.use else False
         start_time = time.perf_counter()
-        if cfg.dataset.name == 'PyG-OLGA_triplet':
+        if cfg.model.loss_fun == 'triplet':
             train_epoch(loggers[0], loaders[0], model, optimizer, scheduler,
                         cfg.optim.batch_accumulation, loss)
         else:
@@ -246,7 +246,7 @@ def custom_train(loggers, loaders, model, optimizer, scheduler, loss=None, split
 
         if is_eval_epoch(cur_epoch):
             for i in range(1, num_splits):
-                if cfg.dataset.name == 'PyG-OLGA_triplet':
+                if cfg.model.loss_fun == 'triplet':
                     eval_epoch(loggers[i], loaders[i], model,
                               split=split_names[i - 1], triplet_loss=loss, 
                               calculate_ndcg=calculate_ndcg,
