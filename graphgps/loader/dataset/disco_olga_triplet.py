@@ -172,6 +172,8 @@ class DISCOOLGATriplet(InMemoryDataset):
             features = acousticbrainz_features
         elif cfg.dataset.features == 'clap':
             features = clap_features
+        elif cfg.dataset.features == 'moods-themes':
+            features = moods_themes_features
         elif cfg.dataset.features == 'acousticbrainz_clap':
             features = np.hstack((acousticbrainz_features, clap_features))
         elif cfg.dataset.features == 'acousticbrainz_moods-themes':
@@ -179,7 +181,7 @@ class DISCOOLGATriplet(InMemoryDataset):
         elif cfg.dataset.features == 'clap_moods-themes':
             features = np.hstack((clap_features, moods_themes_features))
         elif cfg.dataset.features == 'acousticbrainz_clap_moods-themes':
-            features = np.hstack((clap_features, moods_themes_features))
+            features = np.hstack((acousticbrainz_features, clap_features, moods_themes_features))
         else:
             logging.info(f'cfg.dataset.features is incorrect: {cfg.dataset.features}')
             exit(0)
